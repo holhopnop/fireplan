@@ -42,6 +42,7 @@ const TIPS = {
   verdeling: "Je kunt je maandelijkse inleg verdelen over privé beleggen en pensioenbeleggen. Privé beleggen: vrij opneembaar, geen belastingvoordeel. Pensioenbeleggen: vergrendeld tot je pensioen, maar je krijgt ~37% van je inleg terug via belastingteruggave.",
   belastingvoordeel: "Wat je inlegt in een pensioenproduct (lijfrente/pensioenrekening) mag je aftrekken van je belastbaar inkomen. Bij een modaal inkomen krijg je ~37% terug. Dus €200/mnd inleg levert ~€74/mnd terug van de belastingdienst. Dat geld kun je vervolgens privé herbeleggen.",
   vierprocentregel: "De 4%-regel stelt dat je elk jaar ~4% van je vermogen kunt opnemen zonder dat het opraakt over een periode van 30+ jaar. Het is een vuistregel uit onderzoek — geen garantie. Bij tegenvallende beursjaren kun je minder opnemen.",
+  lijfrentestart: "Je mag je lijfrente (pensioenbeleggen) eerder laten ingaan dan je AOW-leeftijd. De minimale startleeftijd is 5 jaar vóór je AOW (dus 62 bij AOW op 67). Let op: hoe eerder je start, hoe langer de minimale uitkeringsduur. Start je op 62, dan moet de uitkering minimaal 25 jaar lopen (5 jaar tot AOW + 20 jaar daarna). Eerder starten = lagere uitkering per maand, maar je hebt wel eerder inkomen.",
   uitgaven: "Vul hier in hoeveel je per maand wilt uitgeven als je gestopt bent met werken. Een veelgebruikte vuistregel: 70% van wat je nu uitgeeft. Je reist niet meer naar werk, eet vaker thuis, en je hypotheek is misschien afgelost."
 };
 
@@ -111,12 +112,18 @@ function ChartTip({ active, payload, label }) {
 /* ═══════════════════════════════════════ INPUT COMPONENTS ═══════════════════════════════════════ */
 function Field({ label, value, onChange, prefix, suffix, hint, info, compact }) {
   const [focused, setFocused] = useState(false);
+  const [raw, setRaw] = useState(String(value));
+  const lastVal = useRef(value);
+  if (value !== lastVal.current && !focused) { setRaw(String(value)); lastVal.current = value; }
   return (
     <div style={{ marginBottom: compact ? 10 : 14, flex: compact ? "1 1 180px" : undefined }}>
       <label style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#AAA", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 3, fontFamily: "var(--f)" }}>{label}{info && <Info tip={info} />}</label>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: compact ? "6px 8px" : "8px 10px", borderRadius: 8, border: `1.5px solid ${focused ? "var(--brand)" : "#EBEBEB"}`, background: "#FAFAFA", transition: "border-color 0.15s" }}>
         {prefix && <span style={{ color: "#BBB", fontSize: 13, fontWeight: 600, fontFamily: "var(--f)" }}>{prefix}</span>}
-        <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        <input type="text" inputMode="numeric" value={focused ? raw : String(value)}
+          onChange={(e) => { const v = e.target.value.replace(/[^0-9.-]/g, ""); setRaw(v); const n = Number(v); if (!isNaN(n)) { onChange(n); lastVal.current = n; } }}
+          onFocus={(e) => { setFocused(true); setRaw(String(value)); setTimeout(() => e.target.select(), 0); }}
+          onBlur={() => { setFocused(false); setRaw(String(value)); }}
           style={{ border: "none", background: "transparent", outline: "none", fontSize: compact ? 13 : 14, fontWeight: 700, color: "#111", width: "100%", fontFamily: "var(--f)" }} />
         {suffix && <span style={{ color: "#BBB", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", fontFamily: "var(--f)" }}>{suffix}</span>}
       </div>
@@ -148,36 +155,32 @@ function AllocationSlider({ total, pct, onTotalChange, onPctChange, rendement, c
   const priv = Math.round(total * (1 - pct / 100));
   const pens = Math.round(total * pct / 100);
   const taxBack = Math.round(pens * BELASTING_TARIEF);
+  const setPriv = (v) => { const newTotal = v + pens; onTotalChange(newTotal); onPctChange(newTotal > 0 ? Math.round(pens / newTotal * 100) : 0); };
+  const setPens = (v) => { const newTotal = priv + v; onTotalChange(newTotal); onPctChange(newTotal > 0 ? Math.round(v / newTotal * 100) : 0); };
   return (
     <div style={{ marginBottom: compact ? 10 : 16 }}>
-      <div style={{ marginBottom: compact ? 10 : 14 }}>
-        <Field label="Totaal beschikbaar per maand" value={total} onChange={onTotalChange} prefix="€" compact={compact} hint="Hoeveel kun je maandelijks beleggen?" />
+      {/* EDITABLE FIELDS */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Privé beleggen" value={priv} onChange={setPriv} prefix="€" suffix="/mnd" compact={compact} />
+        </div>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Pensioenbeleggen" value={pens} onChange={setPens} prefix="€" suffix="/mnd" compact={compact} />
+        </div>
       </div>
       {total > 0 && <>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <span style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#8B8FA3", letterSpacing: "0.07em", textTransform: "uppercase", fontFamily: "var(--f)" }}>Verdeling <Info tip="verdeling" /></span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#8B8FA3", fontFamily: "var(--f)" }}>{100 - pct}% privé · {pct}% pensioen</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#8B8FA3", fontFamily: "var(--f)" }}>Totaal {fmt(total)}/mnd · {100 - pct}% privé · {pct}% pensioen</span>
         </div>
-        <div style={{ fontSize: 10, color: "#C4C8D0", marginBottom: 6, fontFamily: "var(--f)" }}>Privé = overbruggen tot je pensioen ingaat · pensioen = oude dag + belastingvoordeel</div>
-        <div style={{ position: "relative", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: "#C4C8D0", marginBottom: 5, fontFamily: "var(--f)" }}>Privé = overbruggen tot je pensioen ingaat · pensioen = oude dag + belastingvoordeel</div>
+        <div style={{ position: "relative", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
           <div style={{ position: "absolute", inset: 0, display: "flex" }}>
             <div style={{ flex: 100 - pct, background: "var(--brand)", transition: "flex 0.15s", borderRadius: pct === 0 ? 4 : "4px 0 0 4px" }} />
             <div style={{ flex: pct, background: "#D97706", transition: "flex 0.15s", borderRadius: pct === 100 ? 4 : "0 4px 4px 0" }} />
           </div>
           <input type="range" min={0} max={100} step={5} value={pct} onChange={e => onPctChange(Number(e.target.value))}
             style={{ position: "absolute", top: -4, left: 0, width: "100%", height: 16, opacity: 0, cursor: "pointer" }} />
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: taxBack > 0 ? 10 : 0 }}>
-          <div style={{ flex: 1, padding: "8px 10px", borderRadius: 8, background: "#FAFBF9", borderLeft: "3px solid var(--brand)" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#8B8FA3", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 1 }}>Privé</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--brand)", fontFamily: "var(--f)" }}>{fmt(priv)}<span style={{ fontSize: 10, fontWeight: 500, color: "#C4C8D0" }}>/m</span></div>
-            <div style={{ fontSize: 9, color: "#C4C8D0" }}>Vrij opneembaar</div>
-          </div>
-          <div style={{ flex: 1, padding: "8px 10px", borderRadius: 8, background: "#FFFBF5", borderLeft: "3px solid #D97706" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#8B8FA3", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 1 }}>Pensioen</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#D97706", fontFamily: "var(--f)" }}>{fmt(pens)}<span style={{ fontSize: 10, fontWeight: 500, color: "#C4C8D0" }}>/m</span></div>
-            <div style={{ fontSize: 9, color: "#C4C8D0" }}>Vergrendeld tot pensioen</div>
-          </div>
         </div>
         {taxBack > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, background: "var(--brand-light)" }}>
@@ -363,8 +366,8 @@ function Onboarding({ onComplete }) {
   const [d, setD] = useState({
     leeftijd: 40, stopLeeftijd: 63, samenwonend: true,
     gewenstUitgaven: 2000, uitgavenNaAOW: 1800,
-    hypotheekPerMaand: 900, hypotheekEindjaar: 2042,
-    werkgeversPensioen: 800, pensioenIngangLeeftijd: 68,
+    hypotheekPerMaand: 900, hypotheekEindjaar: 2042, woningType: "koop_hypotheek", restKostenNaAflossing: 300, huurPerMaand: 1000, huurIndexatie: 3, vasteWoonlasten: 300,
+    werkgeversPensioen: 800, pensioenIngangLeeftijd: 68, lijfrenteStartLeeftijd: 62,
     pensioenbeleggenPot: 0, spaargeld: 15000, beleggingen: 15000, totaalInleg: 500, pensioenPct: 40,
     rendement: 7, inflatie: 2.5
   });
@@ -428,18 +431,56 @@ function Onboarding({ onComplete }) {
           <Field label="Gewenste maanduitgaven vanaf AOW-leeftijd" value={d.uitgavenNaAOW} onChange={v => set("uitgavenNaAOW", v)} prefix="€" hint="Vaak iets lager — rustiger leven, lagere belasting" />
 
           <div style={{ borderTop: "1px solid #F0F0F0", marginTop: 8, paddingTop: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#AAA", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8, fontFamily: "var(--f)" }}>Hypotheek <Info tip="hypotheek" /></div>
+            <div style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#AAA", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8, fontFamily: "var(--f)" }}>Woonlasten</div>
           </div>
-          <Field label="Hypotheeklasten per maand" value={d.hypotheekPerMaand} onChange={v => set("hypotheekPerMaand", v)} prefix="€" />
-          <Field label="Hypotheek afgelost in (jaar)" value={d.hypotheekEindjaar} onChange={v => set("hypotheekEindjaar", v)} hint="Na dit jaar dalen je woonlasten" />
 
-          {d.hypotheekPerMaand > 0 && (
-            <div style={{ background: "#F0FFF4", borderRadius: 8, padding: "12px 14px", marginTop: 4 }}>
-              <div style={{ fontSize: 11, color: "#16A34A", fontFamily: "var(--f)" }}>
-                Na aflossing dalen je uitgaven met <strong>{fmt(d.hypotheekPerMaand)}</strong>/mnd. Dat scheelt enorm voor je pensioenplan.
+          {/* WONING TYPE */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {[
+              { v: "koop_hypotheek", l: "Koop + hypotheek" },
+              { v: "huur", l: "Huur" },
+              { v: "koop_afgelost", l: "Koop (afgelost)" },
+            ].map(o => (
+              <button key={o.v} onClick={() => set("woningType", o.v)} style={{
+                padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: "var(--f)", cursor: "pointer", transition: "all 0.15s",
+                border: d.woningType === o.v ? "1.5px solid var(--brand)" : "1.5px solid #EBEBEB",
+                background: d.woningType === o.v ? "var(--brand-light)" : "#fff",
+                color: d.woningType === o.v ? "var(--brand)" : "#8B8FA3",
+              }}>{o.l}</button>
+            ))}
+          </div>
+
+          {d.woningType === "koop_hypotheek" && <>
+            <Field label="Hypotheeklasten per maand" value={d.hypotheekPerMaand} onChange={v => set("hypotheekPerMaand", v)} prefix="€" />
+            <Field label="Hypotheek afgelost in (jaar)" value={d.hypotheekEindjaar} onChange={v => set("hypotheekEindjaar", v)} hint="Na dit jaar dalen je woonlasten" />
+            <Field label="Restkosten na aflossing" value={d.restKostenNaAflossing} onChange={v => set("restKostenNaAflossing", v)} prefix="€" suffix="/mnd" hint="VvE, onderhoud, gemeentebelasting — 0 als je dit al in je uitgaven hebt" />
+            {d.hypotheekPerMaand > 0 && (
+              <div style={{ background: "#F0FFF4", borderRadius: 8, padding: "12px 14px", marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: "#16A34A", fontFamily: "var(--f)" }}>
+                  Na aflossing dalen je uitgaven met <strong>{fmt(d.hypotheekPerMaand - d.restKostenNaAflossing)}</strong>/mnd. Je houdt {fmt(d.restKostenNaAflossing)}/mnd aan vaste woonlasten.
+                </div>
+              </div>
+            )}
+          </>}
+
+          {d.woningType === "huur" && <>
+            <Field label="Huur per maand" value={d.huurPerMaand} onChange={v => set("huurPerMaand", v)} prefix="€" hint="Je huidige kale/bruto huur" />
+            <Slider label="Verwachte jaarlijkse huurstijging" value={d.huurIndexatie} onChange={v => set("huurIndexatie", v)} min={0} max={6} step={0.5} format={v => `${v}%`} />
+            <div style={{ background: "#FFFBF5", borderRadius: 8, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: "#B45309", fontFamily: "var(--f)", lineHeight: 1.6 }}>
+                Huur stopt niet. Bij {d.huurIndexatie}% stijging per jaar kost je huur over 20 jaar ~{fmt(Math.round(d.huurPerMaand * Math.pow(1 + d.huurIndexatie / 100, 20)))}/mnd. Houd hier rekening mee in je planning.
               </div>
             </div>
-          )}
+          </>}
+
+          {d.woningType === "koop_afgelost" && <>
+            <Field label="Vaste woonlasten per maand" value={d.vasteWoonlasten} onChange={v => set("vasteWoonlasten", v)} prefix="€" suffix="/mnd" hint="VvE, onderhoud, gemeentebelasting, verzekeringen" />
+            <div style={{ background: "#F0FFF4", borderRadius: 8, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: "#16A34A", fontFamily: "var(--f)" }}>
+                Geen hypotheek — alleen vaste lasten. Dat is een sterke uitgangspositie voor je pensioenplan.
+              </div>
+            </div>
+          </>}
         </div>
       )
     },
@@ -532,11 +573,17 @@ export default function App() {
   const [samenwonend, setSamenwonend] = useState(true);
   const [gewenstUitgaven, setGewenstUitgaven] = useState(2000);
   const [uitgavenNaAOW, setUitgavenNaAOW] = useState(1800);
+  const [woningType, setWoningType] = useState("koop_hypotheek"); // "koop_hypotheek" | "huur" | "koop_afgelost"
   const [hypotheekPerMaand, setHypotheekPerMaand] = useState(900);
   const [hypotheekEindjaar, setHypotheekEindjaar] = useState(2042);
+  const [restKostenNaAflossing, setRestKostenNaAflossing] = useState(300);
+  const [huurPerMaand, setHuurPerMaand] = useState(1000);
+  const [huurIndexatie, setHuurIndexatie] = useState(3);
+  const [vasteWoonlasten, setVasteWoonlasten] = useState(300);
   const [werkgeversPensioen, setWerkgeversPensioen] = useState(800);
   const [pensioenIngangLeeftijd, setPensioenIngangLeeftijd] = useState(68);
   const [pensioenbeleggenPot, setPensioenbeleggenPot] = useState(0);
+  const [lijfrenteStartLeeftijd, setLijfrenteStartLeeftijd] = useState(62);
   const [spaargeld, setSpaargeld] = useState(15000);
   const [beleggingen, setBeleggingen] = useState(15000);
   const [totaalInleg, setTotaalInleg] = useState(500);
@@ -545,19 +592,31 @@ export default function App() {
   const [scenStop, setScenStop] = useState(65);
   const [scenInleg, setScenInleg] = useState(700);
   const [scenRend, setScenRend] = useState(4);
+  const [toonReeel, setToonReeel] = useState(false);
+  const INFLATIE = 0.025;
+  const defleer = (bedrag, jaren) => toonReeel ? Math.round(bedrag / Math.pow(1 + INFLATIE, jaren)) : bedrag;
+  const defJ = (a) => Math.max(0, a - leeftijd); // jaren vanaf nu
 
   const maandInleg = Math.round(totaalInleg * (1 - pensioenPct / 100));
   const pensioenbeleggen = Math.round(totaalInleg * pensioenPct / 100);
   const belastingVoordeel = Math.round(pensioenbeleggen * BELASTING_TARIEF);
   const huidigVermogen = spaargeld + beleggingen;
-  const allState = { leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, hypotheekPerMaand, hypotheekEindjaar, werkgeversPensioen, pensioenIngangLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement };
+  const allState = { leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekEindjaar, restKostenNaAflossing, huurPerMaand, huurIndexatie, vasteWoonlasten, werkgeversPensioen, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement };
   const currentYear = new Date().getFullYear();
   const hypotheekAflosLeeftijd = leeftijd + (hypotheekEindjaar - currentYear);
+  // Woonlasten reductie na aflossing (alleen koop_hypotheek)
+  const woonlastenReductie = woningType === "koop_hypotheek" ? Math.max(0, hypotheekPerMaand - restKostenNaAflossing) : 0;
+  // Effectieve woonlasten per leeftijd
+  const woonlastenOpLeeftijd = (age, jarenVanafNu) => {
+    if (woningType === "koop_hypotheek") return age >= hypotheekAflosLeeftijd ? restKostenNaAflossing : hypotheekPerMaand;
+    if (woningType === "huur") return Math.round(huurPerMaand * Math.pow(1 + huurIndexatie / 100, jarenVanafNu));
+    return vasteWoonlasten; // koop_afgelost
+  };
 
   useEffect(() => {
     const d = load();
     if (d && d.leeftijd) {
-      const S = { leeftijd: setLeeftijd, stopLeeftijd: setStopLeeftijd, samenwonend: setSamenwonend, gewenstUitgaven: setGewenstUitgaven, uitgavenNaAOW: setUitgavenNaAOW, hypotheekPerMaand: setHypotheekPerMaand, hypotheekEindjaar: setHypotheekEindjaar, werkgeversPensioen: setWerkgeversPensioen, pensioenIngangLeeftijd: setPensioenIngangLeeftijd, pensioenbeleggenPot: setPensioenbeleggenPot, spaargeld: setSpaargeld, beleggingen: setBeleggingen, totaalInleg: setTotaalInleg, pensioenPct: setPensioenPct, rendement: setRendement };
+      const S = { leeftijd: setLeeftijd, stopLeeftijd: setStopLeeftijd, samenwonend: setSamenwonend, gewenstUitgaven: setGewenstUitgaven, uitgavenNaAOW: setUitgavenNaAOW, woningType: setWoningType, hypotheekPerMaand: setHypotheekPerMaand, hypotheekEindjaar: setHypotheekEindjaar, restKostenNaAflossing: setRestKostenNaAflossing, huurPerMaand: setHuurPerMaand, huurIndexatie: setHuurIndexatie, vasteWoonlasten: setVasteWoonlasten, werkgeversPensioen: setWerkgeversPensioen, pensioenIngangLeeftijd: setPensioenIngangLeeftijd, lijfrenteStartLeeftijd: setLijfrenteStartLeeftijd, pensioenbeleggenPot: setPensioenbeleggenPot, spaargeld: setSpaargeld, beleggingen: setBeleggingen, totaalInleg: setTotaalInleg, pensioenPct: setPensioenPct, rendement: setRendement };
       Object.entries(d).forEach(([k, v]) => { if (S[k] && v !== undefined) S[k](v); });
       setReady(true);
       setPage("dashboard");
@@ -565,14 +624,20 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (ready) save(allState); }, [leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, hypotheekPerMaand, hypotheekEindjaar, werkgeversPensioen, pensioenIngangLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement]);
+  useEffect(() => { if (ready) save(allState); }, [leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekEindjaar, restKostenNaAflossing, huurPerMaand, huurIndexatie, vasteWoonlasten, werkgeversPensioen, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement]);
   useEffect(() => { setEditOpen(false); }, [tab]);
 
   const handleOnboard = useCallback((d) => {
     setLeeftijd(d.leeftijd); setStopLeeftijd(d.stopLeeftijd); setSamenwonend(d.samenwonend);
     setGewenstUitgaven(d.gewenstUitgaven); setUitgavenNaAOW(d.uitgavenNaAOW);
     setHypotheekPerMaand(d.hypotheekPerMaand); setHypotheekEindjaar(d.hypotheekEindjaar);
+    if (d.woningType) setWoningType(d.woningType);
+    if (d.restKostenNaAflossing !== undefined) setRestKostenNaAflossing(d.restKostenNaAflossing);
+    if (d.huurPerMaand !== undefined) setHuurPerMaand(d.huurPerMaand);
+    if (d.huurIndexatie !== undefined) setHuurIndexatie(d.huurIndexatie);
+    if (d.vasteWoonlasten !== undefined) setVasteWoonlasten(d.vasteWoonlasten);
     setWerkgeversPensioen(d.werkgeversPensioen); setPensioenIngangLeeftijd(d.pensioenIngangLeeftijd);
+    if (d.lijfrenteStartLeeftijd !== undefined) setLijfrenteStartLeeftijd(d.lijfrenteStartLeeftijd);
     setPensioenbeleggenPot(d.pensioenbeleggenPot); setSpaargeld(d.spaargeld); setBeleggingen(d.beleggingen);
     setTotaalInleg(d.totaalInleg); setPensioenPct(d.pensioenPct); setRendement(d.rendement);
     setReady(true);
@@ -591,14 +656,15 @@ export default function App() {
   const pensioenKorting = jarenVervroeging * KORTING_PER_JAAR;
   const effectiefPensioen = Math.round(werkgeversPensioen * (1 - pensioenKorting));
 
-  // Pensioenbeleggen pot
+  // Pensioenbeleggen pot — groeit tot lijfrenteStartLeeftijd
   const pbPot = useMemo(() => {
     if (pensioenbeleggen <= 0 && pensioenbeleggenPot <= 0) return 0;
     let v = pensioenbeleggenPot;
-    for (let i = 0; i < Math.max(0, pensioenIngangLeeftijd - leeftijd); i++) v = v * (1 + rendement / 100) + pensioenbeleggen * 12;
+    for (let i = 0; i < Math.max(0, lijfrenteStartLeeftijd - leeftijd); i++) v = v * (1 + rendement / 100) + pensioenbeleggen * 12;
     return v;
-  }, [pensioenbeleggen, pensioenbeleggenPot, rendement, leeftijd, pensioenIngangLeeftijd]);
-  const pbUitkering = pbPot > 0 ? Math.round(pbPot / (20 * 12)) : 0;
+  }, [pensioenbeleggen, pensioenbeleggenPot, rendement, leeftijd, lijfrenteStartLeeftijd]);
+  const lijfrenteUitkeringsDuur = Math.max(20, (AOW_LEEFTIJD - lijfrenteStartLeeftijd) + 20);
+  const pbUitkering = pbPot > 0 ? Math.round(pbPot / (lijfrenteUitkeringsDuur * 12)) : 0;
 
   // Vermogen op stopleeftijd
   const vermogenOpStop = useMemo(() => {
@@ -633,60 +699,77 @@ export default function App() {
         blHigh = blHigh * (1 + rHigh / 100) + maandInleg * 12;
         pb = pb * (1 + rendement / 100) + pensioenbeleggen * 12;
       } else {
-        const uitg = (a >= AOW_LEEFTIJD ? uitgavenNaAOW : gewenstUitgaven) * 12;
+        const wl = woonlastenOpLeeftijd(a, a - leeftijd);
+        const baseUitg = a >= AOW_LEEFTIJD ? uitgavenNaAOW : gewenstUitgaven;
+        // For koop_hypotheek: before aflossing, full hypotheek in uitgaven. After: restkosten.
+        // For huur: huur grows with indexatie, we add the delta above current huur
+        // For koop_afgelost: no change (vaste lasten already in uitgaven)
+        let uitgAdj = baseUitg;
+        if (woningType === "koop_hypotheek" && a >= hypotheekAflosLeeftijd) uitgAdj = Math.max(0, baseUitg - woonlastenReductie);
+        if (woningType === "huur") uitgAdj = baseUitg + Math.max(0, wl - huurPerMaand); // add huur growth above current
+        const uitg = uitgAdj * 12;
         const aow = a >= AOW_LEEFTIJD ? aowM * 12 : 0;
-        const pen = a >= pensioenIngangLeeftijd ? (effectiefPensioen + pbUitkering) * 12 : 0;
-        const hypotheekAfgelost = a >= hypotheekAflosLeeftijd ? hypotheekPerMaand * 12 : 0;
-        const onttrekking = Math.max(0, uitg - aow - pen - hypotheekAfgelost);
+        const pen = (a >= pensioenIngangLeeftijd ? effectiefPensioen * 12 : 0) + (a >= lijfrenteStartLeeftijd ? pbUitkering * 12 : 0);
+        const onttrekking = Math.max(0, uitg - aow - pen);
         const fromSp = Math.min(Math.max(0, sp), onttrekking);
         sp = sp * (1 + SPAARRENTE) - fromSp;
         bl = Math.max(0, bl * (1 + rendement / 100 * 0.4) - Math.max(0, onttrekking - fromSp));
         blLow = Math.max(0, blLow * (1 + rLow / 100 * 0.4) - Math.max(0, onttrekking - fromSp));
         blHigh = Math.max(0, blHigh * (1 + rHigh / 100 * 0.4) - Math.max(0, onttrekking - fromSp));
         if (sp < 0) sp = 0;
-        if (a < pensioenIngangLeeftijd) pb = pb * (1 + rendement / 100) + pensioenbeleggen * 12;
+        if (a < lijfrenteStartLeeftijd) pb = pb * (1 + rendement / 100) + pensioenbeleggen * 12;
       }
     }
     return d;
-  }, [leeftijd, stopLeeftijd, spaargeld, beleggingen, pensioenbeleggenPot, pensioenbeleggen, maandInleg, rendement, gewenstUitgaven, uitgavenNaAOW, aowM, effectiefPensioen, pbUitkering, pensioenIngangLeeftijd, hypotheekAflosLeeftijd, hypotheekPerMaand]);
+  }, [leeftijd, stopLeeftijd, spaargeld, beleggingen, pensioenbeleggenPot, pensioenbeleggen, maandInleg, rendement, gewenstUitgaven, uitgavenNaAOW, aowM, effectiefPensioen, pbUitkering, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, hypotheekAflosLeeftijd, woningType, hypotheekPerMaand, restKostenNaAflossing, huurPerMaand, huurIndexatie, woonlastenReductie]);
 
-  // Overbrugging phases
+  // Overbrugging phases — event-based to handle lijfrente, werkgeverspensioen, AOW as separate dates
   const overbrugging = useMemo(() => {
-    const fase1Start = stopLeeftijd;
-    const fase1End = Math.min(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-    const fase1Jaren = Math.max(0, fase1End - fase1Start);
-    const fase1UitgavenMnd = fase1Start >= hypotheekAflosLeeftijd ? Math.max(0, gewenstUitgaven - hypotheekPerMaand) : gewenstUitgaven;
-    const fase1Inkomen = 0; // geen inkomen in fase 1
-    const fase1Gat = fase1UitgavenMnd - fase1Inkomen;
-    const fase1Totaal = fase1Gat * 12 * fase1Jaren;
+    // Build sorted event boundaries after stopLeeftijd
+    const events = new Set([stopLeeftijd]);
+    if (lijfrenteStartLeeftijd > stopLeeftijd && (pensioenbeleggen > 0 || pensioenbeleggenPot > 0)) events.add(lijfrenteStartLeeftijd);
+    if (pensioenIngangLeeftijd > stopLeeftijd) events.add(pensioenIngangLeeftijd);
+    if (AOW_LEEFTIJD > stopLeeftijd) events.add(AOW_LEEFTIJD);
+    const sorted = [...events].sort((a, b) => a - b);
 
-    // Fase 2: between pension start and AOW (or vice versa)
-    const fase2Start = Math.min(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-    const fase2End = Math.max(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-    const fase2Jaren = Math.max(0, fase2End - fase2Start);
-    const fase2HeeftPensioen = pensioenIngangLeeftijd <= fase2Start;
-    const fase2HeeftAOW = AOW_LEEFTIJD <= fase2Start;
-    const fase2Inkomen = (fase2HeeftPensioen ? effectiefPensioen + pbUitkering : 0) + (fase2HeeftAOW ? aowM : 0);
-    const fase2UitgavenMnd = fase2Start >= hypotheekAflosLeeftijd ? Math.max(0, gewenstUitgaven - hypotheekPerMaand) : gewenstUitgaven;
-    const fase2Gat = Math.max(0, fase2UitgavenMnd - fase2Inkomen);
-    const fase2Totaal = fase2Gat * 12 * fase2Jaren;
+    const incomeAt = (age) => {
+      let inc = 0;
+      if (age >= AOW_LEEFTIJD) inc += aowM;
+      if (age >= pensioenIngangLeeftijd) inc += effectiefPensioen;
+      if (age >= lijfrenteStartLeeftijd && pbUitkering > 0) inc += pbUitkering;
+      return inc;
+    };
+    const uitgavenAt = (age) => {
+      const base = age >= AOW_LEEFTIJD ? uitgavenNaAOW : gewenstUitgaven;
+      if (woningType === "koop_hypotheek") return age >= hypotheekAflosLeeftijd ? Math.max(0, base - woonlastenReductie) : base;
+      if (woningType === "huur") { const wl = woonlastenOpLeeftijd(age, age - leeftijd); return base + Math.max(0, wl - huurPerMaand); }
+      return base; // koop_afgelost
+    };
 
-    // Fase 3: everything running
-    const fase3Start = Math.max(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-    const fase3Inkomen = effectiefPensioen + pbUitkering + aowM;
-    const fase3UitgavenMnd = fase3Start >= hypotheekAflosLeeftijd ? Math.max(0, uitgavenNaAOW - hypotheekPerMaand) : uitgavenNaAOW;
-    const fase3Gat = Math.max(0, fase3UitgavenMnd - fase3Inkomen);
+    const phases = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const start = sorted[i];
+      const end = i < sorted.length - 1 ? sorted[i + 1] : null;
+      const jaren = end ? end - start : 0;
+      const ink = incomeAt(start);
+      const uitg = uitgavenAt(start);
+      const gat = Math.max(0, uitg - ink);
+      if (jaren > 0) {
+        phases.push({ start, end, jaren, uitgaven: uitg, inkomen: ink, gat, totaal: gat * 12 * jaren });
+      }
+    }
 
-    const totaalNodig = fase1Totaal + fase2Totaal;
+    // Final phase — everything running
+    const allesStart = Math.max(pensioenIngangLeeftijd, AOW_LEEFTIJD, pbUitkering > 0 ? lijfrenteStartLeeftijd : 0);
+    const allesInkomen = incomeAt(allesStart);
+    const allesUitgaven = uitgavenAt(allesStart);
+    const allesGat = Math.max(0, allesUitgaven - allesInkomen);
+
+    const totaalNodig = phases.reduce((s, p) => s + p.totaal, 0);
     const tekort = Math.max(0, totaalNodig - vermogenOpStop);
 
-    return {
-      fase1: { start: fase1Start, end: fase1End, jaren: fase1Jaren, uitgaven: fase1UitgavenMnd, inkomen: fase1Inkomen, gat: fase1Gat, totaal: fase1Totaal },
-      fase2: { start: fase2Start, end: fase2End, jaren: fase2Jaren, uitgaven: fase2UitgavenMnd, inkomen: fase2Inkomen, gat: fase2Gat, totaal: fase2Totaal, heeftPensioen: fase2HeeftPensioen, heeftAOW: fase2HeeftAOW },
-      fase3: { start: fase3Start, uitgaven: fase3UitgavenMnd, inkomen: fase3Inkomen, gat: fase3Gat },
-      totaalNodig, tekort, vermogenOpStop
-    };
-  }, [stopLeeftijd, pensioenIngangLeeftijd, effectiefPensioen, pbUitkering, aowM, gewenstUitgaven, uitgavenNaAOW, hypotheekPerMaand, hypotheekAflosLeeftijd, vermogenOpStop]);
+    return { phases, alles: { start: allesStart, uitgaven: allesUitgaven, inkomen: allesInkomen, gat: allesGat }, totaalNodig, tekort, vermogenOpStop };
+  }, [stopLeeftijd, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, effectiefPensioen, pbUitkering, aowM, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekAflosLeeftijd, woonlastenReductie, huurPerMaand, huurIndexatie, leeftijd, vermogenOpStop, pensioenbeleggen, pensioenbeleggenPot]);
 
   // Scenario: impact extra inleg
   const extraInlegImpact = useMemo(() => {
@@ -697,7 +780,7 @@ export default function App() {
   }, [spaargeld, beleggingen, maandInleg, rendement, leeftijd, stopLeeftijd, vermogenOpStop]);
 
   const fonts = <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />;
-  const baseStyles = <style>{`:root{--f:'Outfit',sans-serif;--brand:#0D6B58;--brand-light:#EBF5F3;--brand-mid:#0A8C72;--bg:#FAFBF9;--card:#fff;--border:#ECF0EE;--text:#1a1a2e;--muted:#8B8FA3;--shadow:rgba(13,107,88,0.06)}*{box-sizing:border-box;margin:0}@keyframes tipIn{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}.fu{animation:fadeUp 0.4s ease forwards}.si{animation:slideIn 0.4s ease forwards}@media(max-width:768px){.dsk{display:none!important}}@media(min-width:769px){.mob{display:none!important}}`}</style>;
+  const baseStyles = <style>{`:root{--f:'Outfit',sans-serif;--brand:#0D6B58;--brand-light:#EBF5F3;--brand-mid:#0A8C72;--bg:#FAFBF9;--card:#fff;--border:#ECF0EE;--text:#1a1a2e;--muted:#8B8FA3;--shadow:rgba(13,107,88,0.06)}*{box-sizing:border-box;margin:0}@keyframes tipIn{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}.fu{animation:fadeUp 0.4s ease forwards}.si{animation:slideIn 0.4s ease forwards}@media(max-width:768px){.dsk{display:none!important}}@media(min-width:769px){.mob{display:none!important}}@media print{body{background:#fff!important}header,.mob,.dsk,[data-noprint]{display:none!important}footer{page-break-before:always}}`}</style>;
 
   if (loading) return <div style={{ minHeight: "100vh", background: "#FAFBF9", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 14, color: "#BBB" }}>Laden...</div></div>;
 
@@ -710,7 +793,7 @@ export default function App() {
     { id: "opbouw", l: "Mijn opbouw", s: "📈 Opbouw" },
     { id: "actie", l: "Wat kan ik doen?", s: "💡 Acties" },
     { id: "scenario", l: "Wat als?", s: "🔀 Wat als?" },
-    { id: "pro", l: "Meer →", s: "⭐ Meer" },
+    { id: "pro", l: "Over", s: "ℹ️ Over" },
   ];
 
   const editPanels = {
@@ -727,7 +810,12 @@ export default function App() {
         <AllocationSlider compact total={totaalInleg} pct={pensioenPct} onTotalChange={setTotaalInleg} onPctChange={setPensioenPct} rendement={rendement} />
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Field compact label="Werkgeverspensioen" value={werkgeversPensioen} onChange={setWerkgeversPensioen} prefix="€" suffix="/mnd" />
-          <Field compact label="Hypotheek" value={hypotheekPerMaand} onChange={setHypotheekPerMaand} prefix="€" suffix="/mnd" />
+          <Slider compact label="Pensioen ingangsl." value={pensioenIngangLeeftijd} onChange={setPensioenIngangLeeftijd} min={60} max={70} format={v => `${v}j`} />
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Slider compact label="Lijfrente start" value={lijfrenteStartLeeftijd} onChange={setLijfrenteStartLeeftijd} min={AOW_LEEFTIJD - 5} max={AOW_LEEFTIJD} format={v => `${v}j`} info="lijfrentestart" />
+          {woningType === "koop_hypotheek" && <Field compact label="Hypotheek" value={hypotheekPerMaand} onChange={setHypotheekPerMaand} prefix="€" suffix="/mnd" />}
+          {woningType === "huur" && <Field compact label="Huur" value={huurPerMaand} onChange={setHuurPerMaand} prefix="€" suffix="/mnd" />}
         </div>
       </div>
     )},
@@ -750,6 +838,7 @@ export default function App() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Slider compact label="Stopleeftijd" value={stopLeeftijd} onChange={setStopLeeftijd} min={50} max={70} format={v => `${v} jaar`} />
           <Slider compact label="Pensioen ingangsl." value={pensioenIngangLeeftijd} onChange={setPensioenIngangLeeftijd} min={60} max={70} format={v => `${v}j`} />
+          <Slider compact label="Lijfrente start" value={lijfrenteStartLeeftijd} onChange={setLijfrenteStartLeeftijd} min={AOW_LEEFTIJD - 5} max={AOW_LEEFTIJD} format={v => `${v}j`} info="lijfrentestart" />
         </div>
       </div>
     )},
@@ -767,7 +856,7 @@ export default function App() {
   const ep = editPanels[tab];
 
   // Phase bar component
-  const PhaseCard = ({ label, color, jaren, start, end, uitgaven, inkomen, gat, details, delay }) => (
+  const PhaseCard = ({ label, color, jaren, start, end, uitgaven, inkomen, gat, details, delay, totaalFase, vermogenDaarna, vermogenPct }) => (
     <div style={{ flex: "1 1 260px", background: "#fff", borderRadius: 14, padding: "20px 22px", borderLeft: `4px solid ${color}`, boxShadow: "0 1px 3px rgba(0,0,0,0.03)", transition: "box-shadow 0.25s, transform 0.25s", animation: `fadeUp 0.4s ease ${delay || 0}s both` }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 20px rgba(13,107,88,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03)"; e.currentTarget.style.transform = "none"; }}
@@ -778,16 +867,31 @@ export default function App() {
       </div>
       <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.55, marginBottom: 14 }}>{details}</div>
       <div style={{ display: "flex", gap: 0 }}>
-        {[
-          { l: "Nodig", v: fmt(uitgaven), c: "#1a1a2e" },
-          { l: "Inkomen", v: fmt(inkomen), c: inkomen > 0 ? "#0D6B58" : "#C4C8D0" },
-          { l: gat > 0 ? "Tekort" : "OK", v: fmt(gat > 0 ? gat : Math.max(0, inkomen - uitgaven)), c: gat > 0 ? "#DC2626" : "#0D6B58" },
-        ].map((r, i) => (
-          <div key={r.l} style={{ flex: 1, padding: "8px 0", borderTop: "1px solid #F0F2F5", textAlign: i === 0 ? "left" : i === 2 ? "right" : "center" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#C4C8D0", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{r.l}</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: r.c }}>{r.v}<span style={{ fontSize: 10, fontWeight: 500, color: "#D0D4DC" }}>/m</span></div>
-          </div>
-        ))}
+        {inkomen === 0 && totaalFase !== undefined ? (
+          // NO INCOME: show cost-focused metrics
+          [
+            { l: "Maandlasten", v: fmt(uitgaven), c: "#1a1a2e", suffix: "/m" },
+            { l: "Totaal", v: fmt(totaalFase), c: "#DC2626", suffix: "" },
+            { l: "Vermogen daarna", v: vermogenDaarna !== undefined ? fmt(vermogenDaarna) : "—", c: vermogenDaarna !== undefined && vermogenDaarna > 0 ? "var(--brand)" : "#DC2626", suffix: "" },
+          ].map((r, i) => (
+            <div key={r.l} style={{ flex: 1, padding: "8px 0", borderTop: "1px solid #F0F2F5", textAlign: i === 0 ? "left" : i === 2 ? "right" : "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#C4C8D0", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{r.l}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: r.c }}>{r.v}{r.suffix && <span style={{ fontSize: 10, fontWeight: 500, color: "#D0D4DC" }}>{r.suffix}</span>}</div>
+            </div>
+          ))
+        ) : (
+          // HAS INCOME: show nodig/inkomen/tekort
+          [
+            { l: "Nodig", v: fmt(uitgaven), c: "#1a1a2e" },
+            { l: "Inkomen", v: fmt(inkomen), c: inkomen > 0 ? "#0D6B58" : "#C4C8D0" },
+            { l: gat > 0 ? "Tekort" : "OK", v: fmt(gat > 0 ? gat : Math.max(0, inkomen - uitgaven)), c: gat > 0 ? "#DC2626" : "#0D6B58" },
+          ].map((r, i) => (
+            <div key={r.l} style={{ flex: 1, padding: "8px 0", borderTop: "1px solid #F0F2F5", textAlign: i === 0 ? "left" : i === 2 ? "right" : "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#C4C8D0", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{r.l}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: r.c }}>{r.v}<span style={{ fontSize: 10, fontWeight: 500, color: "#D0D4DC" }}>/m</span></div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -808,7 +912,7 @@ export default function App() {
             <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: "7px 18px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "var(--f)", transition: "all 0.15s", color: tab === t.id ? "#fff" : "#8B8FA3", background: tab === t.id ? "var(--brand)" : "transparent" }}>{t.l}</button>
           ))}
         </nav>
-        <button onClick={() => { try { localStorage.removeItem(SKEY); } catch {} setReady(false); setPage("landing"); }} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #ECF0EE", background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#C4C8D0", fontFamily: "var(--f)", transition: "all 0.15s" }}
+        <button data-noprint onClick={() => { try { localStorage.removeItem(SKEY); } catch {} setReady(false); setPage("landing"); }} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #ECF0EE", background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#C4C8D0", fontFamily: "var(--f)", transition: "all 0.15s" }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--brand)"; e.currentTarget.style.color = "var(--brand)"; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = "#ECF0EE"; e.currentTarget.style.color = "#C4C8D0"; }}
         >Reset</button>
@@ -821,25 +925,39 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 920, margin: "0 auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        {ep && <EditPanel title={ep.title} open={editOpen} onToggle={() => { setEditOpen(!editOpen); if (firstVisit) setFirstVisit(false); }} summary={ep.summary} showHint={firstVisit}>{ep.content}</EditPanel>}
+        {ep && <div data-noprint><EditPanel title={ep.title} open={editOpen} onToggle={() => { setEditOpen(!editOpen); if (firstVisit) setFirstVisit(false); }} summary={ep.summary} showHint={firstVisit}>{ep.content}</EditPanel></div>}
 
         {/* ═══ OVERZICHT TAB ═══ */}
         {tab === "overzicht" && <>
           {/* SCORE */}
           {(() => {
-            const score = overbrugging.tekort <= 0 ? "goed" : overbrugging.tekort < gewenstUitgaven * 24 ? "krap" : "tekort";
+            const overschot = Math.max(0, vermogenOpStop - overbrugging.totaalNodig);
+            const tekortMaanden = overbrugging.tekort > 0 ? Math.round(overbrugging.tekort / Math.max(1, gewenstUitgaven)) : 0;
+            const tekortJaren = Math.round(tekortMaanden / 12 * 10) / 10;
+            const score = overbrugging.tekort <= 0 && overschot > overbrugging.totaalNodig * 0.1 ? "goed"
+              : overbrugging.tekort <= 0 ? "opkoers"
+              : overbrugging.tekort <= gewenstUitgaven * 12 ? "aandacht"
+              : "serieus";
+            const scoreColor = { goed: "var(--brand)", opkoers: "#2563EB", aandacht: "#B45309", serieus: "#DC2626" }[score];
+            const scoreBg = { goed: "#EBF5F3", opkoers: "#EFF6FF", aandacht: "#FFFBF5", serieus: "#FFF5F5" }[score];
+            const scoreBorder = { goed: "var(--brand)", opkoers: "#2563EB", aandacht: "#D97706", serieus: "#DC2626" }[score];
+            // Concrete fix suggestions
+            const jarenLaterNodig = overbrugging.tekort > 0 ? Math.ceil(overbrugging.tekort / Math.max(1, gewenstUitgaven * 12)) : 0;
+            const extraInlegNodig = overbrugging.tekort > 0 && (stopLeeftijd - leeftijd) > 0 ? Math.round(overbrugging.tekort / ((stopLeeftijd - leeftijd) * 12)) : 0;
             const topActie = extraInlegImpact > 0 ? `€200/mnd extra beleggen levert ${fmt(extraInlegImpact)} op` : "Bekijk je opties";
             return <>
-              <div style={{ background: score === "goed" ? "#EBF5F3" : score === "krap" ? "#FFFBF5" : "#FFF5F5", borderRadius: 16, padding: "28px 26px", borderLeft: `4px solid ${score === "goed" ? "var(--brand)" : score === "krap" ? "#D97706" : "#DC2626"}` }} className="fu">
-                <div style={{ fontSize: "clamp(18px, 3vw, 24px)", fontWeight: 800, color: score === "goed" ? "var(--brand)" : score === "krap" ? "#B45309" : "#DC2626", lineHeight: 1.3, marginBottom: 6, fontFamily: "var(--f)" }}>
+              <div style={{ background: scoreBg, borderRadius: 16, padding: "28px 26px", borderLeft: `4px solid ${scoreBorder}` }} className="fu">
+                <div style={{ fontSize: "clamp(18px, 3vw, 24px)", fontWeight: 800, color: scoreColor, lineHeight: 1.3, marginBottom: 6, fontFamily: "var(--f)" }}>
                   {score === "goed" && `Je kunt op je ${stopLeeftijd}e stoppen met werken`}
-                  {score === "krap" && `Stoppen op je ${stopLeeftijd}e kan, maar het wordt krap`}
-                  {score === "tekort" && `Op je ${stopLeeftijd}e stoppen lukt nog niet`}
+                  {score === "opkoers" && `Je kunt op je ${stopLeeftijd}e stoppen, maar je hebt weinig marge`}
+                  {score === "aandacht" && `Op je ${stopLeeftijd}e stoppen kan, maar je komt ${fmt(overbrugging.tekort)} tekort`}
+                  {score === "serieus" && `Op je ${stopLeeftijd}e stoppen lukt nog niet`}
                 </div>
-                <div style={{ fontSize: 13, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>
-                  {score === "goed" && `Je bouwt ${fmt(vermogenOpStop)} op en hebt ${fmt(overbrugging.totaalNodig)} nodig. Je houdt ${fmt(vermogenOpStop - overbrugging.totaalNodig)} over als buffer.`}
-                  {score === "krap" && `Je bouwt ${fmt(vermogenOpStop)} op en hebt ${fmt(overbrugging.totaalNodig)} nodig. Je tekort van ${fmt(overbrugging.tekort)} is overbrugbaar met kleine aanpassingen.`}
-                  {score === "tekort" && `Je hebt ${fmt(overbrugging.totaalNodig)} nodig maar bouwt ${fmt(vermogenOpStop)} op. Er ontbreekt ${fmt(overbrugging.tekort)}.`}
+                <div style={{ fontSize: 13, color: "#8B8FA3", lineHeight: 1.65, fontFamily: "var(--f)" }}>
+                  {score === "goed" && `Je bouwt ${fmt(vermogenOpStop)} op en hebt ${fmt(overbrugging.totaalNodig)} nodig. Je houdt ${fmt(overschot)} over als buffer.`}
+                  {score === "opkoers" && `Je bouwt net genoeg op: ${fmt(vermogenOpStop)} bij ${fmt(overbrugging.totaalNodig)} nodig. Je buffer van ${fmt(overschot)} is klein — een tegenvallend beursjaar kan je plan onder druk zetten.`}
+                  {score === "aandacht" && `Je komt ${fmt(overbrugging.tekort)} tekort — dat is ${tekortMaanden} maanden aan uitgaven. ${jarenLaterNodig === 1 ? "1 jaar later stoppen" : `${jarenLaterNodig} jaar later stoppen`} of ${fmt(extraInlegNodig)}/mnd extra beleggen zou dit dekken.`}
+                  {score === "serieus" && `Je komt ${fmt(overbrugging.tekort)} tekort — dat is ${tekortJaren > 1 ? `${tekortJaren} jaar` : `${tekortMaanden} maanden`} aan uitgaven. Je bouwt ${fmt(vermogenOpStop)} op maar hebt ${fmt(overbrugging.totaalNodig)} nodig. Bekijk welke combinatie van aanpassingen het verschil maakt.`}
                 </div>
               </div>
 
@@ -849,7 +967,7 @@ export default function App() {
                   { tab: "overbrugging", icon: "📊", q: "Heb ik genoeg om te overbruggen?",
                     value: overbrugging.tekort > 0 ? fmt(overbrugging.tekort) + " tekort" : fmt(vermogenOpStop - overbrugging.totaalNodig) + " over",
                     accent: overbrugging.tekort > 0 ? "#DC2626" : "var(--brand)",
-                    sub: `${overbrugging.fase1.jaren > 0 ? overbrugging.fase1.jaren + "j zonder inkomen" : ""} ${overbrugging.fase1.jaren > 0 && overbrugging.fase2.jaren > 0 ? " · " : ""}${overbrugging.fase2.jaren > 0 ? overbrugging.fase2.jaren + "j deels inkomen" : ""}`.trim() || "Alles gedekt"
+                    sub: `${fmt(overbrugging.totaalNodig)} nodig in vrij vermogen${overbrugging.phases.length > 0 ? " · " + overbrugging.phases.map(p => `${p.jaren}j ${p.inkomen > 0 ? "deels" : "geen"} inkomen`).join(" · ") : ""}`
                   },
                   { tab: "opbouw", icon: "📈", q: "Hoe groeit mijn vermogen?",
                     value: fmt(vermogenOpStop),
@@ -896,10 +1014,12 @@ export default function App() {
                   punten.push({ icon: "🎁", text: `Je belegt ${fmt(totaalInleg)}/mnd, maar niks via pensioen. Je mist ~${fmt(Math.round(totaalInleg * 0.37))}/mnd belastingvoordeel. Schuif een deel richting pensioen.`, tab: "actie" });
                 if (jarenVervroeging > 0)
                   punten.push({ icon: "⚠️", text: `Je pensioen gaat in op ${pensioenIngangLeeftijd} — dat is ${jarenVervroeging} jaar vervroegd. Dit kost ~${Math.round(pensioenKorting * 100)}% van je uitkering, levenslang.`, tab: "opbouw" });
-                if (overbrugging.fase1.jaren >= 5)
-                  punten.push({ icon: "🔴", text: `Je hebt ${overbrugging.fase1.jaren} jaar zonder enig inkomen. Dat is een lange periode om te overbruggen met eigen vermogen.`, tab: "overbrugging" });
-                if (hypotheekPerMaand > 0 && hypotheekAflosLeeftijd > stopLeeftijd)
-                  punten.push({ icon: "🏠", text: `Je hypotheek is pas afgelost op ${hypotheekAflosLeeftijd}. Tot die tijd zijn je uitgaven ${fmt(hypotheekPerMaand)}/mnd hoger.`, tab: "overbrugging" });
+                if (overbrugging.phases.length > 0 && overbrugging.phases[0].inkomen === 0 && overbrugging.phases[0].jaren >= 5)
+                  punten.push({ icon: "🔴", text: `Je hebt ${overbrugging.phases[0].jaren} jaar zonder enig inkomen. Dat is een lange periode om te overbruggen met eigen vermogen.`, tab: "overbrugging" });
+                if (woningType === "koop_hypotheek" && hypotheekAflosLeeftijd > stopLeeftijd)
+                  punten.push({ icon: "🏠", text: `Je hypotheek is pas afgelost op ${hypotheekAflosLeeftijd}. Tot die tijd zijn je woonlasten ${fmt(hypotheekPerMaand)}/mnd (daarna ${fmt(restKostenNaAflossing)}/mnd).`, tab: "overbrugging" });
+                if (woningType === "huur" && huurIndexatie > 2)
+                  punten.push({ icon: "🏠", text: `Je huur stijgt ${huurIndexatie}% per jaar. Over 20 jaar is dat ${fmt(Math.round(huurPerMaand * Math.pow(1 + huurIndexatie / 100, 20)))}/mnd. Dat vreet aan je overbrugging.`, tab: "overbrugging" });
                 if (belastingVoordeel > 50)
                   punten.push({ icon: "💰", text: `Je krijgt ~${fmt(belastingVoordeel)}/mnd terug van de belastingdienst. Herbeleggen levert flink extra op.`, tab: "actie" });
 
@@ -934,9 +1054,11 @@ export default function App() {
                     { l: "Stoppen op", v: `${stopLeeftijd} jaar`, c: "var(--brand)" },
                     { l: "AOW vanaf", v: `${AOW_LEEFTIJD} jaar`, c: "var(--brand)" },
                     { l: "Pensioen vanaf", v: `${pensioenIngangLeeftijd} jaar${jarenVervroeging > 0 ? ` (${jarenVervroeging}j vervroegd)` : ""}`, c: jarenVervroeging > 0 ? "#D97706" : "var(--brand)" },
+                    ...(pbUitkering > 0 ? [{ l: "Lijfrente vanaf", v: `${lijfrenteStartLeeftijd} jaar · ${fmt(pbUitkering)}/mnd · ${lijfrenteUitkeringsDuur}j uitkering`, c: "#D97706" }] : []),
                     { l: "Maandelijkse inleg", v: `${fmt(totaalInleg)} (${100 - pensioenPct}% privé · ${pensioenPct}% pensioen)`, c: "var(--brand)" },
                     { l: "Vermogen nu", v: `${fmt(spaargeld)} spaar + ${fmt(beleggingen)} beleg${pensioenbeleggenPot > 0 ? ` + ${fmt(pensioenbeleggenPot)} pensioenpot` : ""}`, c: "var(--brand)" },
                     { l: "Woonsituatie", v: samenwonend ? `Samenwonend · AOW ${fmt(aowM)}/mnd` : `Alleenstaand · AOW ${fmt(aowM)}/mnd`, c: "var(--brand)" },
+                    { l: "Woonlasten", v: woningType === "koop_hypotheek" ? `Koop · ${fmt(hypotheekPerMaand)}/mnd → ${fmt(restKostenNaAflossing)}/mnd na aflossing (${hypotheekEindjaar})` : woningType === "huur" ? `Huur · ${fmt(huurPerMaand)}/mnd (+${huurIndexatie}%/jaar)` : `Koop afgelost · ${fmt(vasteWoonlasten)}/mnd vaste lasten`, c: "var(--brand)" },
                   ].map((r, i) => (
                     <div key={r.l} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "7px 0", borderTop: i > 0 ? "1px solid #F0F2F5" : "none" }}>
                       <span style={{ fontSize: 12, color: "#8B8FA3", fontFamily: "var(--f)" }}>{r.l}</span>
@@ -952,7 +1074,14 @@ export default function App() {
         {/* ═══ OVERBRUGGING TAB ═══ */}
         {tab === "overbrugging" && <>
           {/* HERO METRIC */}
-          <Metric hero label={overbrugging.tekort > 0 ? "Je hebt een tekort" : "Je kunt je plan halen"} value={fmt(overbrugging.tekort > 0 ? overbrugging.tekort : vermogenOpStop - overbrugging.totaalNodig)} accent={overbrugging.tekort > 0 ? "#DC2626" : "#16A34A"} sub={overbrugging.tekort > 0 ? `Je hebt ${fmt(overbrugging.totaalNodig)} nodig maar bouwt ${fmt(vermogenOpStop)} op` : `Je bouwt ${fmt(vermogenOpStop)} op en hebt ${fmt(overbrugging.totaalNodig)} nodig`} info="overbrugging" />
+          <Metric hero
+            label={overbrugging.tekort > 0 ? (overbrugging.tekort > gewenstUitgaven * 12 ? "Serieus tekort" : "Tekort — maar overbrugbaar") : "Je kunt je plan halen"}
+            value={fmt(overbrugging.tekort > 0 ? overbrugging.tekort : vermogenOpStop - overbrugging.totaalNodig)}
+            accent={overbrugging.tekort > 0 ? (overbrugging.tekort > gewenstUitgaven * 12 ? "#DC2626" : "#B45309") : "#16A34A"}
+            sub={overbrugging.tekort > 0
+              ? `Dat is ${Math.round(overbrugging.tekort / Math.max(1, gewenstUitgaven))} maanden aan uitgaven. Je hebt ${fmt(overbrugging.totaalNodig)} nodig maar bouwt ${fmt(vermogenOpStop)} op.`
+              : `Je bouwt ${fmt(vermogenOpStop)} op en hebt ${fmt(overbrugging.totaalNodig)} nodig`
+            } info="overbrugging" />
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} className="fu">
             <Metric label="Vermogen op stopleeftijd" value={fmt(vermogenOpStop)} sub={`Op je ${stopLeeftijd}e`} />
@@ -961,34 +1090,137 @@ export default function App() {
 
           {/* PHASE CARDS */}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }} className="fu">
-            {overbrugging.fase1.jaren > 0 && (
-              <PhaseCard label="Geen inkomen" color="#DC2626" jaren={overbrugging.fase1.jaren} start={overbrugging.fase1.start} end={overbrugging.fase1.end} uitgaven={overbrugging.fase1.uitgaven} inkomen={0} gat={overbrugging.fase1.gat}
-                details="Geen salaris, geen pensioen, geen AOW. Je leeft van eigen vermogen." delay={0} />
-            )}
-            {overbrugging.fase2.jaren > 0 && (
-              <PhaseCard label={overbrugging.fase2.heeftPensioen ? "Pensioen loopt" : "AOW loopt"} color="#D97706" jaren={overbrugging.fase2.jaren} start={overbrugging.fase2.start} end={overbrugging.fase2.end} uitgaven={overbrugging.fase2.uitgaven} inkomen={overbrugging.fase2.inkomen} gat={overbrugging.fase2.gat}
-                details={overbrugging.fase2.heeftPensioen ? `Werkgeverspensioen: ${fmt(effectiefPensioen)}/mnd. Nog geen AOW.` : `AOW: ${fmt(aowM)}/mnd. Nog geen werkgeverspensioen.`} delay={0.08} />
-            )}
-            <PhaseCard label="Alles loopt" color="#0D6B58" jaren="rest" start={overbrugging.fase3.start} end="∞" uitgaven={overbrugging.fase3.uitgaven} inkomen={overbrugging.fase3.inkomen} gat={overbrugging.fase3.gat}
-              details={`AOW + werkgeverspensioen${pbUitkering > 0 ? " + eigen pensioen" : ""}. ${overbrugging.fase3.gat > 0 ? "Resteert een maandelijks tekort." : "Je inkomen dekt je uitgaven."}`} delay={0.16} />
+            {(() => {
+              let resterendVermogen = vermogenOpStop;
+              return overbrugging.phases.map((p, i) => {
+                const isNoIncome = p.inkomen === 0;
+                const totaalFase = p.gat * 12 * p.jaren;
+                const vermogenNa = Math.max(0, resterendVermogen - totaalFase);
+                const vermogenPct = vermogenOpStop > 0 ? Math.round(totaalFase / vermogenOpStop * 100) : 0;
+                const label = isNoIncome ? "Je leeft van eigen vermogen" : `${fmt(p.inkomen)}/mnd inkomen`;
+                const color = isNoIncome ? "#DC2626" : p.inkomen < p.uitgaven ? "#D97706" : "#0D6B58";
+                const sources = [];
+                if (p.start >= lijfrenteStartLeeftijd && pbUitkering > 0) sources.push(`Lijfrente: ${fmt(pbUitkering)}/mnd`);
+                if (p.start >= pensioenIngangLeeftijd) sources.push(`Werkgeverspensioen: ${fmt(effectiefPensioen)}/mnd`);
+                if (p.start >= AOW_LEEFTIJD) sources.push(`AOW: ${fmt(aowM)}/mnd`);
+                const details = isNoIncome
+                  ? `Kost ${vermogenPct}% van je vermogen. Na deze fase heb je nog ${fmt(vermogenNa)} over.`
+                  : sources.join(" · ");
+                const card = <PhaseCard key={i} label={label} color={color} jaren={p.jaren} start={p.start} end={p.end} uitgaven={p.uitgaven} inkomen={p.inkomen} gat={p.gat} details={details} delay={i * 0.08} totaalFase={isNoIncome ? totaalFase : undefined} vermogenDaarna={isNoIncome ? vermogenNa : undefined} vermogenPct={isNoIncome ? vermogenPct : undefined} />;
+                resterendVermogen = vermogenNa;
+                return card;
+              });
+            })()}
+            <PhaseCard label="Alles loopt" color="#0D6B58" jaren="rest" start={overbrugging.alles.start} end="∞" uitgaven={overbrugging.alles.uitgaven} inkomen={overbrugging.alles.inkomen} gat={overbrugging.alles.gat}
+              details={`AOW + werkgeverspensioen${pbUitkering > 0 ? " + lijfrente" : ""}. ${overbrugging.alles.gat > 0 ? "Resteert een maandelijks tekort." : "Je inkomen dekt je uitgaven."}`} delay={overbrugging.phases.length * 0.08} />
           </div>
 
-          {overbrugging.fase1.jaren > 0 && (
+          {overbrugging.phases.length > 0 && (
             <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
               <div style={{ display: "flex", alignItems: "center", fontSize: 12, fontWeight: 800, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Overbruggingskosten <Info tip="overbrugging" /></div>
               <div style={{ fontSize: 12, color: "#777", fontFamily: "var(--f)", lineHeight: 1.7 }}>
-                Fase 1: {overbrugging.fase1.jaren} jaar × {fmt(overbrugging.fase1.gat)}/mnd = <strong>{fmt(overbrugging.fase1.totaal)}</strong>
-                {overbrugging.fase2.jaren > 0 && <><br/>Fase 2: {overbrugging.fase2.jaren} jaar × {fmt(overbrugging.fase2.gat)}/mnd = <strong>{fmt(overbrugging.fase2.totaal)}</strong></>}
+                {overbrugging.phases.map((p, i) => <span key={i}>{i > 0 && <br/>}Fase {i + 1}: {p.jaren} jaar × {fmt(p.gat)}/mnd = <strong>{fmt(p.totaal)}</strong></span>)}
                 <br/>Totaal nodig: <strong style={{ color: "#111", fontSize: 14 }}>{fmt(overbrugging.totaalNodig)}</strong>
                 <br/>Je hebt op je {stopLeeftijd}e: <strong style={{ color: overbrugging.tekort > 0 ? "#DC2626" : "#16A34A" }}>{fmt(vermogenOpStop)}</strong>
               </div>
             </div>
           )}
 
+          {/* #3: NODIG IN VRIJ VERMOGEN */}
+          {overbrugging.phases.length > 0 && (() => {
+            // Calculate how much needs to come from private wealth (before lijfrente kicks in)
+            const priveFases = overbrugging.phases.filter(p => p.start < lijfrenteStartLeeftijd || pbUitkering === 0);
+            const nodigPrive = priveFases.reduce((s, p) => {
+              const endCapped = p.end ? Math.min(p.end, pbUitkering > 0 ? lijfrenteStartLeeftijd : 999) : p.start;
+              const jaren = Math.max(0, endCapped - p.start);
+              return s + (p.gat * 12 * jaren);
+            }, 0);
+            const nodigTotaal = overbrugging.totaalNodig;
+            return (
+              <div style={{ background: "var(--brand-light)", borderRadius: 10, padding: "16px 18px" }} className="fu">
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", marginBottom: 6, fontFamily: "var(--f)" }}>Hoeveel vrij vermogen heb je nodig?</div>
+                <div style={{ fontSize: 12, color: "var(--brand-mid)", lineHeight: 1.7, fontFamily: "var(--f)" }}>
+                  Je hebt <strong>{fmt(nodigTotaal)}</strong> nodig om de overbrugging te dekken.
+                  {pbUitkering > 0 && nodigPrive < nodigTotaal
+                    ? ` Daarvan moet <strong>${fmt(nodigPrive)}</strong> uit vrij opneembaar vermogen komen (vóór je lijfrente op ${lijfrenteStartLeeftijd} ingaat). De rest wordt gedekt door je lijfrente-uitkering.`
+                    : ` Dit moet volledig uit je vrij opneembare vermogen komen (spaargeld + beleggingen).`
+                  }
+                  {` Je hebt op je ${stopLeeftijd}e `}<strong style={{ color: vermogenOpStop >= nodigTotaal ? "var(--brand)" : "#DC2626" }}>{fmt(vermogenOpStop)}</strong> aan vrij vermogen.
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* #2: ONTTREKKINGSVOLGORDE */}
+          {overbrugging.phases.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", marginBottom: 10, fontFamily: "var(--f)" }}>Aanbevolen volgorde: hoe spreek je je potjes aan?</div>
+              {(() => {
+                const stappen = [];
+                // Phase: before any income
+                const eersteInkomenLeeftijd = Math.min(
+                  pbUitkering > 0 ? lijfrenteStartLeeftijd : 999,
+                  pensioenIngangLeeftijd,
+                  AOW_LEEFTIJD
+                );
+                if (stopLeeftijd < eersteInkomenLeeftijd) {
+                  stappen.push({
+                    periode: `${stopLeeftijd}–${eersteInkomenLeeftijd}`,
+                    titel: "Leef van privé vermogen",
+                    uitleg: `Je hebt nog geen pensioeninkomen. Gebruik je spaargeld en beleggingen. Begin met spaargeld (groeit het minst), daarna beleggingen.`,
+                    kleur: "var(--brand)"
+                  });
+                }
+                // Phase: lijfrente starts
+                if (pbUitkering > 0 && lijfrenteStartLeeftijd < Math.max(pensioenIngangLeeftijd, AOW_LEEFTIJD)) {
+                  stappen.push({
+                    periode: `Vanaf ${lijfrenteStartLeeftijd}`,
+                    titel: `Start lijfrente-uitkering (${fmt(pbUitkering)}/mnd)`,
+                    uitleg: `Je lijfrente gaat in. Minimale uitkeringsduur: ${lijfrenteUitkeringsDuur} jaar. Vul aan vanuit privé vermogen als de uitkering niet genoeg is.`,
+                    kleur: "#D97706"
+                  });
+                }
+                // Phase: werkgeverspensioen starts (if after lijfrente/stopLeeftijd)
+                if (pensioenIngangLeeftijd > stopLeeftijd) {
+                  stappen.push({
+                    periode: `Vanaf ${pensioenIngangLeeftijd}`,
+                    titel: `Werkgeverspensioen gaat in (${fmt(effectiefPensioen)}/mnd)`,
+                    uitleg: jarenVervroeging > 0
+                      ? `Vervroegd: ${jarenVervroeging} jaar eerder = ~${Math.round(pensioenKorting * 100)}% minder, levenslang.`
+                      : `Op de richtleeftijd — geen korting.`,
+                    kleur: "#7C3AED"
+                  });
+                }
+                // Phase: AOW
+                if (AOW_LEEFTIJD > stopLeeftijd) {
+                  stappen.push({
+                    periode: `Vanaf ${AOW_LEEFTIJD}`,
+                    titel: `AOW gaat in (${fmt(aowM)}/mnd)`,
+                    uitleg: `${samenwonend ? "Samenwonend tarief" : "Alleenstaand tarief"}. Vanaf hier betaal je ook minder belasting (~19% ipv ~37%).`,
+                    kleur: "#2563EB"
+                  });
+                }
+                return stappen.map((s, i) => (
+                  <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: i > 0 ? "1px solid #F0F2F5" : "none" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, width: 28 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: s.kleur, color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)" }}>{i + 1}</div>
+                      {i < stappen.length - 1 && <div style={{ width: 2, flex: 1, background: "#ECF0EE", marginTop: 4 }} />}
+                    </div>
+                    <div style={{ flex: 1, paddingBottom: 4 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#C4C8D0", fontFamily: "var(--f)", marginBottom: 1 }}>{s.periode}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", fontFamily: "var(--f)", marginBottom: 3 }}>{s.titel}</div>
+                      <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>{s.uitleg}</div>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
           <div style={{ background: "#FAFAFA", borderRadius: 10, padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
             <div style={{ display: "flex", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Over inflatie <Info tip="inflatie" /></div>
             <div style={{ fontSize: 12, color: "#777", fontFamily: "var(--f)", lineHeight: 1.6 }}>
-              Alle bedragen in deze tool zijn in euro's van vandaag. Door inflatie (~2-3%/jaar) zal je koopkracht lager zijn. Spaargeld wordt hierdoor minder waard, beleggingsrendement compenseert dit deels. Houd een marge aan.
+              Alle bedragen op deze pagina zijn in euro's van vandaag. Op de opbouw-tab kun je de inflatie-toggle aanzetten om te zien wat je vermogen echt waard is.
             </div>
           </div>
 
@@ -1008,7 +1240,7 @@ export default function App() {
           </div>
 
           {/* #1: ACTIE NUDGE */}
-          <button onClick={() => setTab("actie")} style={{
+          <button data-noprint onClick={() => setTab("actie")} style={{
             width: "100%", padding: "16px 20px", borderRadius: 12, border: "none",
             background: "var(--brand-light)", cursor: "pointer", fontFamily: "var(--f)",
             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1019,8 +1251,8 @@ export default function App() {
             className="fu"
           >
             <div>
-              <div data-title style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", textAlign: "left", transition: "color 0.2s" }}>{overbrugging.tekort > 0 ? "Wil je dit tekort verkleinen?" : "Wil je je voorsprong vergroten?"}</div>
-              <div data-sub style={{ fontSize: 11, color: "#8B8FA3", textAlign: "left", marginTop: 2, transition: "color 0.2s" }}>Bekijk concrete acties die je nu kunt nemen →</div>
+              <div data-title style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", textAlign: "left", transition: "color 0.2s" }}>{overbrugging.tekort > gewenstUitgaven * 12 ? "Hoe dicht je dit gat?" : overbrugging.tekort > 0 ? "Dit tekort is overbrugbaar" : "Wil je je voorsprong vergroten?"}</div>
+              <div data-sub style={{ fontSize: 11, color: "#8B8FA3", textAlign: "left", marginTop: 2, transition: "color 0.2s" }}>{overbrugging.tekort > 0 ? "Bekijk concrete acties die je nu kunt nemen →" : "Bekijk wat je nog kunt optimaliseren →"}</div>
             </div>
             <span data-arrow style={{ fontSize: 20, color: "var(--brand)", fontWeight: 300, transition: "color 0.2s" }}>→</span>
           </button>
@@ -1031,23 +1263,42 @@ export default function App() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} className="fu">
             <Metric label="Spaargeld" value={fmt(spaargeld)} sub="Groeit ~2%/jaar" info="spaargeld" />
             <Metric label="Beleggingen" value={fmt(beleggingen)} sub={`Groeit ~${rendement}%/jaar`} info="beleggingen" />
-            <Metric label={`Totaal op ${stopLeeftijd}`} value={fmt(vermogenOpStop)} accent="var(--brand)" sub={`Over ${Math.max(0, stopLeeftijd - leeftijd)} jaar`} />
+            <Metric label={`Totaal op ${stopLeeftijd}${toonReeel ? " (reëel)" : ""}`} value={fmt(defleer(vermogenOpStop, defJ(stopLeeftijd)))} accent="var(--brand)" sub={`Over ${Math.max(0, stopLeeftijd - leeftijd)} jaar${toonReeel ? " · in koopkracht van vandaag" : ""}`} />
           </div>
 
-          {hypotheekPerMaand > 0 && (
+          {/* WOONLASTEN INFO */}
+          {(woningType === "koop_hypotheek" ? hypotheekPerMaand > 0 : true) && (
             <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }} className="fu">
               <div>
-                <div style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#BBB", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 3, fontFamily: "var(--f)" }}>Hypotheek impact <Info tip="hypotheek" /></div>
-                <div style={{ fontSize: 12, color: "#777", fontFamily: "var(--f)" }}>Woonlasten dalen met <strong style={{ color: "#16A34A" }}>{fmt(hypotheekPerMaand)}</strong>/mnd op leeftijd {hypotheekAflosLeeftijd}</div>
+                <div style={{ display: "flex", alignItems: "center", fontSize: 10, fontWeight: 700, color: "#BBB", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 3, fontFamily: "var(--f)" }}>Woonlasten</div>
+                {woningType === "koop_hypotheek" && <div style={{ fontSize: 12, color: "#777", fontFamily: "var(--f)" }}>Woonlasten dalen van {fmt(hypotheekPerMaand)} naar <strong style={{ color: "#16A34A" }}>{fmt(restKostenNaAflossing)}</strong>/mnd op leeftijd {hypotheekAflosLeeftijd}</div>}
+                {woningType === "huur" && <div style={{ fontSize: 12, color: "#777", fontFamily: "var(--f)" }}>Huur {fmt(huurPerMaand)}/mnd · stijgt {huurIndexatie}%/jaar · op je {stopLeeftijd}e: ~{fmt(Math.round(huurPerMaand * Math.pow(1 + huurIndexatie / 100, Math.max(0, stopLeeftijd - leeftijd))))}/mnd</div>}
+                {woningType === "koop_afgelost" && <div style={{ fontSize: 12, color: "#16A34A", fontFamily: "var(--f)" }}>Geen hypotheek — alleen vaste lasten ({fmt(vasteWoonlasten)}/mnd)</div>}
               </div>
             </div>
           )}
 
           <div style={{ background: "#fff", borderRadius: 10, padding: "18px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
-            <div style={{ display: "flex", alignItems: "center", fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Vermogensopbouw per bron <Info tip="compound" /></div>
-            <div style={{ fontSize: 11, color: "#C4C8D0", marginBottom: 14, fontFamily: "var(--f)" }}>Spaargeld (~2%) · beleggingen (~{rendement}%) · <span style={{ color: "#8B8FA3" }}>gestreepte lijn = pessimistisch scenario (4%)</span></div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", fontSize: 15, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)" }}>Vermogensopbouw per bron <Info tip="compound" /></div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: toonReeel ? "var(--brand)" : "#8B8FA3", fontWeight: 600, fontFamily: "var(--f)", transition: "color 0.15s" }}>
+                <div onClick={() => setToonReeel(!toonReeel)} style={{ width: 34, height: 18, borderRadius: 9, background: toonReeel ? "var(--brand)" : "#D0D4DC", position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", position: "absolute", top: 2, left: toonReeel ? 18 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+                </div>
+                {toonReeel ? "Gecorrigeerd voor inflatie (2,5%)" : "Nominaal (zonder inflatie)"}
+              </label>
+            </div>
+            <div style={{ fontSize: 11, color: "#C4C8D0", marginBottom: 14, fontFamily: "var(--f)" }}>
+              {toonReeel
+                ? <span>Bedragen in koopkracht van vandaag · <span style={{ color: "#8B8FA3" }}>door inflatie is je geld later minder waard</span></span>
+                : <span>Spaargeld (~2%) · beleggingen (~{rendement}%) · <span style={{ color: "#8B8FA3" }}>gestreepte lijn = pessimistisch scenario (4%)</span></span>
+              }
+            </div>
             <ResponsiveContainer width="100%" height={340}>
-              <AreaChart data={groeiData}>
+              <AreaChart data={groeiData.map(r => {
+                const j = defJ(r.leeftijd);
+                return toonReeel ? { ...r, spaargeld: defleer(r.spaargeld, j), beleggingen: defleer(r.beleggingen, j), pensioenpot: defleer(r.pensioenpot, j), vermogen: defleer(r.vermogen, j), bandLow: defleer(r.bandLow, j) } : r;
+              })}>
                 <defs>
                   <linearGradient id="gSp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#94A3B8" stopOpacity={0.35}/><stop offset="100%" stopColor="#94A3B8" stopOpacity={0.05}/></linearGradient>
                   <linearGradient id="gBl" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0D6B58" stopOpacity={0.25}/><stop offset="100%" stopColor="#0D6B58" stopOpacity={0.03}/></linearGradient>
@@ -1061,7 +1312,7 @@ export default function App() {
                 <ReferenceLine x={stopLeeftijd} stroke="var(--brand)" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: "Stop", position: "top", fontSize: 10, fill: "var(--brand)" }}/>
                 <ReferenceLine x={AOW_LEEFTIJD} stroke="#2563EB" strokeDasharray="3 3" label={{ value: "AOW", position: "top", fontSize: 10, fill: "#2563EB" }}/>
                 <ReferenceLine x={pensioenIngangLeeftijd} stroke="#7C3AED" strokeDasharray="3 3" label={{ value: "Pensioen", position: "top", fontSize: 9, fill: "#7C3AED" }}/>
-                {hypotheekAflosLeeftijd > leeftijd && hypotheekAflosLeeftijd < 85 && <ReferenceLine x={hypotheekAflosLeeftijd} stroke="#16A34A" strokeDasharray="3 3" label={{ value: "Hyp. vrij", position: "top", fontSize: 9, fill: "#16A34A" }}/>}
+                {woningType === "koop_hypotheek" && hypotheekAflosLeeftijd > leeftijd && hypotheekAflosLeeftijd < 85 && <ReferenceLine x={hypotheekAflosLeeftijd} stroke="#16A34A" strokeDasharray="3 3" label={{ value: "Hyp. vrij", position: "top", fontSize: 9, fill: "#16A34A" }}/>}
                 <Area type="monotone" dataKey="bandLow" stroke="#0D6B58" strokeWidth={0.8} strokeDasharray="4 4" strokeOpacity={0.3} fill="none" name="4% rendement" dot={false} activeDot={false}/>
                 <Area type="monotone" dataKey="spaargeld" stackId="1" stroke="#94A3B8" fill="url(#gSp)" name="Spaargeld" strokeWidth={1.5}/>
                 <Area type="monotone" dataKey="beleggingen" stackId="1" stroke="var(--brand)" fill="url(#gBl)" name="Beleggingen" strokeWidth={1.5}/>
@@ -1073,17 +1324,17 @@ export default function App() {
           {/* SUMMARY TABLE AT STOP AGE */}
           {(() => {
             const atStop = groeiData.find(d => d.leeftijd === stopLeeftijd) || {};
-            const atNow = groeiData.find(d => d.leeftijd === leeftijd) || {};
+            const j = defJ(stopLeeftijd);
             const rows = [
-              { l: "Spaargeld", now: spaargeld, then: atStop.spaargeld || 0, rente: "2%", c: "#94A3B8" },
-              { l: "Beleggingen", now: beleggingen, then: atStop.beleggingen || 0, rente: `${rendement}%`, c: "var(--brand)" },
-              ...((pensioenbeleggen > 0 || pensioenbeleggenPot > 0) ? [{ l: "Pensioenbeleggen", now: pensioenbeleggenPot, then: atStop.pensioenpot || 0, rente: `${rendement}%`, c: "#D97706" }] : []),
+              { l: "Spaargeld", now: spaargeld, then: defleer(atStop.spaargeld || 0, j), rente: "2%", c: "#94A3B8" },
+              { l: "Beleggingen", now: beleggingen, then: defleer(atStop.beleggingen || 0, j), rente: `${rendement}%`, c: "var(--brand)" },
+              ...((pensioenbeleggen > 0 || pensioenbeleggenPot > 0) ? [{ l: "Pensioenbeleggen", now: pensioenbeleggenPot, then: defleer(atStop.pensioenpot || 0, j), rente: `${rendement}%`, c: "#D97706" }] : []),
             ];
             const totNow = rows.reduce((s, r) => s + r.now, 0);
             const totThen = rows.reduce((s, r) => s + r.then, 0);
             return (
               <div style={{ background: "#fff", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 10, fontFamily: "var(--f)" }}>Vermogen op je {stopLeeftijd}e</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 10, fontFamily: "var(--f)" }}>Vermogen op je {stopLeeftijd}e {toonReeel && <span style={{ fontSize: 11, fontWeight: 600, color: "#8B8FA3" }}>(koopkracht vandaag)</span>}</div>
                 {rows.map((r, i) => (
                   <div key={r.l} style={{ display: "flex", alignItems: "center", padding: "8px 0", borderTop: i > 0 ? "1px solid #F5F5F5" : "none" }}>
                     <div style={{ width: 3, height: 24, borderRadius: 2, background: r.c, marginRight: 10 }} />
@@ -1108,7 +1359,7 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 6, background: "#FAFBF9", fontSize: 11, color: "#8B8FA3", fontFamily: "var(--f)", lineHeight: 1.5 }}>
-                  Pessimistisch scenario (4% rendement): {fmt(atStop.bandLow || 0)}
+                  Pessimistisch scenario (4% rendement): {fmt(defleer(atStop.bandLow || 0, j))}
                 </div>
               </div>
             );
@@ -1119,7 +1370,7 @@ export default function App() {
             {[
               { l: "AOW-uitkering", v: aowM, n: `${samenwonend ? "Samenwonend" : "Alleenstaand"} · vanaf ${AOW_LEEFTIJD}`, c: "#2563EB" },
               { l: "Werkgeverspensioen", v: effectiefPensioen, n: `${jarenVervroeging > 0 ? `Vervroegd: ${jarenVervroeging}j × 8% korting` : "Op richtleeftijd"} · vanaf ${pensioenIngangLeeftijd}`, c: "#7C3AED" },
-              ...(pbUitkering > 0 ? [{ l: "Eigen pensioenbeleggen", v: pbUitkering, n: `Huidig: ${fmtS(pensioenbeleggenPot)} · Pot op ${pensioenIngangLeeftijd}: ${fmtS(pbPot)} · 20j uitkering`, c: "#D97706" }] : []),
+              ...(pbUitkering > 0 ? [{ l: "Eigen pensioenbeleggen", v: pbUitkering, n: `Pot: ${fmtS(pbPot)} · uitkering vanaf ${lijfrenteStartLeeftijd} · minimaal ${lijfrenteUitkeringsDuur}j`, c: "#D97706" }] : []),
               { l: "Eigen vermogen (4% opname)", v: Math.round(vermogenOpStop * 0.04 / 12), n: "Veilige jaarlijkse onttrekking", c: "var(--brand)", info: "vierprocentregel" },
             ].map((r, i) => (
               <div key={r.l} style={{ display: "flex", alignItems: "center", padding: "9px 0", borderTop: i > 0 ? "1px solid #F5F5F5" : "none" }}>
@@ -1187,242 +1438,129 @@ export default function App() {
             </div>
           ))}
 
-          {/* BELEGGEN — INKLAPBAAR */}
-          <details style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.03)", overflow: "hidden" }} className="fu">
-            <summary style={{ padding: "18px 22px", cursor: "pointer", fontFamily: "var(--f)", listStyle: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--brand)" }}>Nieuw in beleggen? Lees mijn gids →</div>
-                <div style={{ fontSize: 11, color: "#8B8FA3", marginTop: 2 }}>Wat ik zelf doe, waarom, en waar je kunt starten</div>
-              </div>
-              <span style={{ fontSize: 16, color: "#C4C8D0", fontWeight: 300, flexShrink: 0, marginLeft: 12 }}>▼</span>
-            </summary>
-            <div style={{ padding: "0 22px 22px", borderTop: "1px solid #F0F2F5" }}>
-
-              {/* PERSOONLIJK INTRO */}
-              <div style={{ margin: "16px 0", padding: "16px 18px", borderRadius: 10, background: "var(--brand-light)", borderLeft: "3px solid var(--brand)" }}>
-                <div style={{ fontSize: 12, color: "var(--brand)", lineHeight: 1.75, fontFamily: "var(--f)" }}>
-                  <strong>Even persoonlijk.</strong> Ik beleg zelf bij <strong>Meesman</strong> — zowel mijn pensioen als mijn vrije vermogen. Waarom? Omdat ik niet wil nadenken over fondskeuze. Ik zet elke maand automatisch een bedrag in, Meesman belegt het in een wereldwijd indexfonds, en ik kijk er verder niet naar om. Dat is het.
-                </div>
-                <div style={{ fontSize: 12, color: "var(--brand)", lineHeight: 1.75, fontFamily: "var(--f)", marginTop: 8 }}>
-                  Daarnaast gebruik ik <strong>Bux</strong> voor een klein deel individuele aandelen — puur omdat ik dat leuk vind, niet omdat het slimmer is. Voor 90% van de mensen is alleen Meesman genoeg.
-                </div>
-              </div>
-
-              {/* DE BASIS */}
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 8, marginTop: 16, fontFamily: "var(--f)" }}>De basis in 4 zinnen</div>
-              <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.75, fontFamily: "var(--f)", marginBottom: 16 }}>
-                <strong style={{ color: "#1a1a2e" }}>Spreid breed</strong> — koop geen losse aandelen maar een indexfonds dat duizenden bedrijven bevat.
-                <strong style={{ color: "#1a1a2e" }}> Denk in jaren</strong> — de beurs gaat op en neer, over 15+ jaar is het gemiddelde ~7% per jaar.
-                <strong style={{ color: "#1a1a2e" }}> Houd kosten laag</strong> — elk procent aan kosten vreet over 30 jaar tienduizenden euro's.
-                <strong style={{ color: "#1a1a2e" }}> Automatiseer</strong> — elke maand hetzelfde bedrag, niet timen, niet pieken.
-              </div>
-
-              {/* DE GOUDEN COMBI */}
-              <div style={{ background: "#fff", borderRadius: 12, border: "1.5px solid var(--brand)", padding: "16px 18px", marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>De gouden combi: privé + pensioen</div>
-                <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.7, marginBottom: 12, fontFamily: "var(--f)" }}>
-                  Je hebt twee problemen die elk een eigen oplossing vragen:
-                </div>
-
-                {/* TIMELINE */}
-                <div style={{ display: "flex", alignItems: "stretch", gap: 0, marginBottom: 12, borderRadius: 8, overflow: "hidden", height: 48 }}>
-                  {stopLeeftijd < pensioenIngangLeeftijd && (
-                    <div style={{ flex: Math.max(1, pensioenIngangLeeftijd - stopLeeftijd), background: "var(--brand)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4px 8px", minWidth: 80 }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Privé vermogen</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{stopLeeftijd}–{pensioenIngangLeeftijd}</div>
-                    </div>
-                  )}
-                  <div style={{ flex: Math.max(1, 15), background: "#D97706", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4px 8px", minWidth: 80 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Pensioenbeleggen</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{pensioenIngangLeeftijd}+</div>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 200px", padding: "12px 14px", borderRadius: 10, borderLeft: "3px solid var(--brand)", background: "#FAFBF9" }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--brand)", marginBottom: 3, fontFamily: "var(--f)" }}>Privé → overbruggen</div>
-                    <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>
-                      {stopLeeftijd < pensioenIngangLeeftijd
-                        ? `Tussen je ${stopLeeftijd}e en ${pensioenIngangLeeftijd}e heb je geen salaris en nog geen pensioenuitkering. Die ${pensioenIngangLeeftijd - stopLeeftijd} jaar overbruggen doe je met privé vermogen.`
-                        : `Vrij opneembaar vermogen voor de overbrugging en als buffer.`
-                      }
-                    </div>
-                  </div>
-                  <div style={{ flex: "1 1 200px", padding: "12px 14px", borderRadius: 10, borderLeft: "3px solid #D97706", background: "#FFFBF5" }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#B45309", marginBottom: 3, fontFamily: "var(--f)" }}>Pensioen → oude dag</div>
-                    <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>
-                      Vanaf je {pensioenIngangLeeftijd}e krijg je maandelijks uitgekeerd. Plus: ~37% belastingvoordeel nu.{belastingVoordeel > 0 ? ` Bij jou: ${fmt(belastingVoordeel)}/mnd terug.` : ""}
-                    </div>
-                  </div>
-                </div>
-
-                {pensioenPct === 0 && totaalInleg > 0 && (
-                  <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#FFF5F5", fontSize: 11, color: "#DC2626", fontFamily: "var(--f)", lineHeight: 1.6 }}>
-                    <strong>Je mist het pensioen-deel.</strong> Je belegt {fmt(totaalInleg)}/mnd, maar alles privé. Schuif een deel richting pensioen en je krijgt ~{fmt(Math.round(totaalInleg * 0.4 * BELASTING_TARIEF))}/mnd terug.
-                  </div>
-                )}
-                {pensioenPct === 100 && totaalInleg > 0 && (
-                  <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#FFF5F5", fontSize: 11, color: "#DC2626", fontFamily: "var(--f)", lineHeight: 1.6 }}>
-                    <strong>Je mist het privé-deel.</strong> Je kunt pas bij je pensioengeld op je {pensioenIngangLeeftijd}e.{stopLeeftijd < pensioenIngangLeeftijd ? ` Wie betaalt de ${pensioenIngangLeeftijd - stopLeeftijd} jaar daarvoor?` : ""} Schuif een deel naar privé.
-                  </div>
-                )}
-              </div>
-
-              {/* MIJN AANBEVELINGEN */}
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 10, fontFamily: "var(--f)" }}>Wat ik aanraad</div>
-
-              {/* MEESMAN */}
-              <div style={{ background: "var(--brand-light)", borderRadius: 12, padding: "16px 18px", marginBottom: 10, border: "1px solid var(--brand)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "var(--brand)", fontFamily: "var(--f)" }}>Meesman</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#fff", color: "var(--brand)" }}>Mijn keuze</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#fff", color: "var(--brand)" }}>Overbruggen</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#FFFBF5", color: "#B45309" }}>Oude dag</span>
-                  </div>
-                  <span style={{ fontSize: 10, color: "var(--brand)", fontFamily: "var(--f)" }}>0,5% per jaar</span>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--brand-mid)", lineHeight: 1.7, marginBottom: 8, fontFamily: "var(--f)" }}>
-                  De simpelste en beste optie voor de meeste mensen. Eén wereldwijd indexfonds, volledig geautomatiseerd. Je kiest een risicoprofiel, zet een automatische inleg in, en je hoeft er nooit meer naar om te kijken. Biedt zowel een vrije beleggingsrekening (voor overbruggen) als een pensioenrekening (voor je oude dag). Alles bij één partij, twee rekeningen — precies de gouden combi.
-                </div>
-                <a href="https://www.meesman.nl" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", textDecoration: "none", borderBottom: "1px solid var(--brand)", fontFamily: "var(--f)" }}>→ Bekijk Meesman</a>
-              </div>
-
-              {/* BUX */}
-              <div style={{ background: "var(--brand-light)", borderRadius: 12, padding: "16px 18px", marginBottom: 10, border: "1px solid var(--brand)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "var(--brand)", fontFamily: "var(--f)" }}>Bux</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#fff", color: "var(--brand)" }}>Mijn keuze</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#fff", color: "var(--brand)" }}>Overbruggen</span>
-                  </div>
-                  <span style={{ fontSize: 10, color: "var(--brand)", fontFamily: "var(--f)" }}>€0 transactiekosten</span>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--brand-mid)", lineHeight: 1.7, marginBottom: 8, fontFamily: "var(--f)" }}>
-                  Ik gebruik Bux naast Meesman voor een klein deel individuele aandelen. Puur omdat ik dat leuk vind — niet omdat het slimmer is. Mooie app, lage instap (vanaf €10), en je kunt ook automatisch in indexfondsen beleggen. Geen pensioenrekening — alleen voor vrij vermogen. Als je wilt spelen met losse aandelen naast je serieuze indexbelegging, is Bux daar geschikt voor.
-                </div>
-                <a href="https://getbux.com" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", textDecoration: "none", borderBottom: "1px solid var(--brand)", fontFamily: "var(--f)" }}>→ Bekijk Bux</a>
-              </div>
-
-              {/* ALTERNATIEVEN */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#8B8FA3", marginTop: 14, marginBottom: 8, fontFamily: "var(--f)" }}>Alternatieven</div>
-
-              {[
-                {
-                  name: "Brand New Day", url: "https://new.brandnewday.nl",
-                  tags: [{ l: "Oude dag", c: "#B45309", bg: "#FFFBF5" }],
-                  kosten: "0,16%–0,59%",
-                  desc: "Specialist in pensioenbeleggen via lijfrente. Lage kosten, lang trackrecord. Als je puur een pensioenrekening wilt en Meesman niet aanspreekt, is dit het beste alternatief. Geen vrije beleggingsrekening — alleen pensioen."
-                },
-                {
-                  name: "DeGiro", url: "https://www.degiro.nl",
-                  tags: [{ l: "Overbruggen", c: "var(--brand)", bg: "var(--brand-light)" }],
-                  kosten: "€0 kernselectie",
-                  desc: "De goedkoopste broker voor wie zelf wil kiezen. Enorme fondskeuze, gratis kernselectie ETF's. Maar je moet zelf weten wat je koopt, er is geen automatische inleg, en geen pensioenrekening. Voor beginners raad ik het niet aan als eerste stap — ga eerst naar Meesman, en als je later meer controle wilt, kun je altijd overstappen."
-                },
-              ].map(a => (
-                <div key={a.name} style={{ background: "#FAFBF9", borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a2e", fontFamily: "var(--f)" }}>{a.name}</span>
-                      {a.tags.map(t => <span key={t.l} style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: t.bg, color: t.c }}>{t.l}</span>)}
-                    </div>
-                    <span style={{ fontSize: 10, color: "#C4C8D0", fontFamily: "var(--f)" }}>{a.kosten}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.65, marginBottom: 6, fontFamily: "var(--f)" }}>{a.desc}</div>
-                  <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 700, color: "var(--brand)", textDecoration: "none", borderBottom: "1px dashed var(--brand)", fontFamily: "var(--f)" }}>→ Bekijk {a.name}</a>
-                </div>
-              ))}
-
-              {/* CONCREET ADVIES */}
-              <div style={{ background: "var(--brand-light)", borderRadius: 10, padding: "14px 16px", marginTop: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Mijn advies voor jouw situatie</div>
-                <div style={{ fontSize: 11, color: "var(--brand-mid)", lineHeight: 1.7, fontFamily: "var(--f)" }}>
-                  {pensioenPct > 0 && pensioenPct < 100
-                    ? `Open twee rekeningen bij Meesman: een pensioenrekening voor je ${pensioenPct}% pensioen-deel (${fmt(pensioenbeleggen)}/mnd) en een beleggingsrekening voor je ${100 - pensioenPct}% privé-deel (${fmt(maandInleg)}/mnd). Wil je daarnaast spelen met losse aandelen? Dan is Bux leuk voor een klein bedrag erbij.`
-                    : pensioenPct === 0
-                    ? `Start met een beleggingsrekening bij Meesman voor je privé vermogen. Maar denk serieus na over ook een pensioenrekening erbij — je laat nu belastingvoordeel liggen. Beide kan bij Meesman.`
-                    : `Open een pensioenrekening bij Meesman voor je pensioen-deel. Maar voeg ook een beleggingsrekening toe voor vrij vermogen — je hebt dat nodig voor de overbrugging. Beide kan bij Meesman.`
-                  }
-                </div>
-              </div>
-
-              {/* MEER LEREN */}
-              <div style={{ marginTop: 12, fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>
-                Meer leren over indexbeleggen? Ik raad deze bronnen aan: <a href="https://www.financieelonafhankelijkblog.nl" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", textDecoration: "none", borderBottom: "1px dashed var(--brand)" }}>Mr. FOB</a> en <a href="https://www.indexfondsenvergelijken.nl" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", textDecoration: "none", borderBottom: "1px dashed var(--brand)" }}>Indexfondsen Vergelijken</a>.
-              </div>
-
-              <div style={{ marginTop: 10, fontSize: 10, color: "#C4C8D0", lineHeight: 1.6, fontFamily: "var(--f)" }}>
-                Dit is mijn persoonlijke ervaring, geen financieel advies. Beleggen brengt risico's met zich mee. We ontvangen geen vergoeding van bovenstaande partijen.
-              </div>
+          {/* CTA TO BELEGGEN GIDS */}
+          <button onClick={() => setTab("pro")} style={{
+            width: "100%", padding: "16px 20px", borderRadius: 12, border: "none",
+            background: "#fff", cursor: "pointer", fontFamily: "var(--f)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)", transition: "all 0.2s"
+          }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(13,107,88,0.08)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03)"; e.currentTarget.style.transform = "none"; }}
+            className="fu"
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", textAlign: "left" }}>Nieuw in beleggen? Lees mijn tips en aanbevelingen</div>
+              <div style={{ fontSize: 11, color: "#8B8FA3", textAlign: "left", marginTop: 2 }}>Wat ik zelf doe, waar je kunt starten, en bronnen om meer te leren →</div>
             </div>
-          </details>
+            <span style={{ fontSize: 20, color: "var(--brand)", fontWeight: 300, flexShrink: 0, marginLeft: 12 }}>→</span>
+          </button>
         </>}
 
         {/* ═══ WAT ALS TAB ═══ */}
         {tab === "scenario" && <>
-          <div style={{ background: "#fff", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", display: "flex", gap: 20, flexWrap: "wrap" }} className="fu">
-            <div style={{ flex: "1 1 180px" }}><Slider label="Scenario: stopleeftijd" value={scenStop} onChange={setScenStop} min={50} max={70} format={v => `${v} jaar`} /></div>
-            <div style={{ flex: "1 1 180px" }}><Slider label="Scenario: inleg" value={scenInleg} onChange={setScenInleg} min={0} max={2000} step={50} format={v => `€${v}`} /></div>
-            <div style={{ flex: "1 1 180px" }}><Slider label="Scenario: rendement" value={scenRend} onChange={setScenRend} min={1} max={12} step={0.5} format={v => `${v}%`} /></div>
+          {/* SLIDERS */}
+          <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", marginBottom: 10, fontFamily: "var(--f)" }}>Pas aan en vergelijk met je huidige plan</div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 160px" }}><Slider label="Stopleeftijd" value={scenStop} onChange={setScenStop} min={50} max={70} format={v => `${v} jaar`} /></div>
+              <div style={{ flex: "1 1 160px" }}><Slider label="Maandelijkse inleg" value={scenInleg} onChange={setScenInleg} min={0} max={2000} step={50} format={v => `€${v}`} /></div>
+              <div style={{ flex: "1 1 160px" }}><Slider label="Rendement" value={scenRend} onChange={setScenRend} min={1} max={12} step={0.5} format={v => `${v}%`} /></div>
+            </div>
           </div>
 
           {(() => {
+            // Baseline
             const calcV = (sl, il, rend) => { let sp = spaargeld, bl = beleggingen; for (let i = 0; i < Math.max(0, sl - leeftijd); i++) { sp = sp * (1 + SPAARRENTE); bl = bl * (1 + rend / 100) + il * 12; } return Math.round(sp + bl); };
             const calcOB = (sl) => {
-              const f1j = Math.max(0, Math.min(pensioenIngangLeeftijd, AOW_LEEFTIJD) - sl);
-              const f2s = Math.min(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-              const f2e = Math.max(pensioenIngangLeeftijd, AOW_LEEFTIJD);
-              const f2j = Math.max(0, f2e - f2s);
-              const f2ink = (pensioenIngangLeeftijd <= f2s ? effectiefPensioen + pbUitkering : 0) + (AOW_LEEFTIJD <= f2s ? aowM : 0);
-              return f1j * gewenstUitgaven * 12 + Math.max(0, gewenstUitgaven - f2ink) * 12 * f2j;
+              const events = new Set([sl]);
+              if (lijfrenteStartLeeftijd > sl && pbUitkering > 0) events.add(lijfrenteStartLeeftijd);
+              if (pensioenIngangLeeftijd > sl) events.add(pensioenIngangLeeftijd);
+              if (AOW_LEEFTIJD > sl) events.add(AOW_LEEFTIJD);
+              const sorted = [...events].sort((a, b) => a - b);
+              let total = 0;
+              for (let i = 0; i < sorted.length; i++) {
+                const s = sorted[i], e = i < sorted.length - 1 ? sorted[i + 1] : null;
+                if (!e) continue;
+                let ink = 0;
+                if (s >= AOW_LEEFTIJD) ink += aowM;
+                if (s >= pensioenIngangLeeftijd) ink += effectiefPensioen;
+                if (s >= lijfrenteStartLeeftijd && pbUitkering > 0) ink += pbUitkering;
+                total += Math.max(0, gewenstUitgaven - ink) * 12 * (e - s);
+              }
+              return total;
             };
-            const scenarios = [
-              { label: `Jouw plan (${rendement}%)`, sl: stopLeeftijd, il: maandInleg, rend: rendement, highlight: true },
-              { label: `Stop op ${scenStop}`, sl: scenStop, il: maandInleg, rend: rendement, highlight: false },
-              { label: `${fmt(scenInleg)}/mnd inleg`, sl: stopLeeftijd, il: scenInleg, rend: rendement, highlight: false },
-              { label: `Rendement ${scenRend}%`, sl: stopLeeftijd, il: maandInleg, rend: scenRend, highlight: false },
-            ];
+
+            const baseV = calcV(stopLeeftijd, maandInleg, rendement);
+            const baseOB = calcOB(stopLeeftijd);
+            const baseTekort = Math.max(0, baseOB - baseV);
+            const baseOver = Math.max(0, baseV - baseOB);
+
+            const scenV = calcV(scenStop, scenInleg, scenRend);
+            const scenOB = calcOB(scenStop);
+            const scenTekort = Math.max(0, scenOB - scenV);
+            const scenOver = Math.max(0, scenV - scenOB);
+
+            const verschilV = scenV - baseV;
+            const verschilResult = (scenOver - scenTekort) - (baseOver - baseTekort);
+
+            // Chart data — two lines
+            const chartData = Array.from({ length: Math.max(1, 86 - leeftijd) }, (_, i) => {
+              const a = leeftijd + i;
+              let sp1 = spaargeld, bl1 = beleggingen, sp2 = spaargeld, bl2 = beleggingen;
+              for (let y = 0; y < i; y++) {
+                sp1 *= (1 + SPAARRENTE); bl1 = bl1 * (1 + rendement / 100) + maandInleg * 12;
+                sp2 *= (1 + SPAARRENTE); bl2 = bl2 * (1 + scenRend / 100) + scenInleg * 12;
+              }
+              return { leeftijd: a, huidig: Math.round(sp1 + bl1), scenario: Math.round(sp2 + bl2) };
+            });
+
             return <>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} className="fu">
-                {scenarios.map((sc) => {
-                  const v = calcV(sc.sl, sc.il, sc.rend);
-                  const ob = calcOB(sc.sl);
-                  const tekort = Math.max(0, ob - v);
-                  return (
-                    <div key={sc.label} style={{ flex: "1 1 200px", background: "#fff", borderRadius: 10, padding: "14px 16px", border: `1px solid ${sc.highlight ? "var(--brand)" : "#F0F0F0"}` }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: sc.highlight ? "var(--brand)" : "#999", marginBottom: 8, fontFamily: "var(--f)" }}>{sc.label}</div>
-                      <div style={{ fontSize: 10, color: "#BBB", fontFamily: "var(--f)", marginBottom: 2 }}>Vermogen op stop</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)", marginBottom: 6 }}>{fmt(v)}</div>
-                      <div style={{ fontSize: 10, color: "#BBB", fontFamily: "var(--f)", marginBottom: 2 }}>Overbrugging nodig</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#777", fontFamily: "var(--f)", marginBottom: 6 }}>{fmt(ob)}</div>
-                      <div style={{ fontSize: 10, color: "#BBB", fontFamily: "var(--f)", marginBottom: 2 }}>{tekort > 0 ? "Tekort" : "Overschot"}</div>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: tekort > 0 ? "#DC2626" : "#16A34A", fontFamily: "var(--f)" }}>{fmt(tekort > 0 ? tekort : v - ob)}</div>
-                    </div>
-                  );
-                })}
+              {/* COMPARISON TABLE */}
+              <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", overflow: "auto" }} className="fu">
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--f)", fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "8px 10px", color: "#8B8FA3", fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid #F0F2F5" }}></th>
+                      <th style={{ textAlign: "right", padding: "8px 10px", color: "var(--brand)", fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid var(--brand)" }}>Jouw plan</th>
+                      <th style={{ textAlign: "right", padding: "8px 10px", color: "#2563EB", fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid #2563EB" }}>Scenario</th>
+                      <th style={{ textAlign: "right", padding: "8px 10px", color: "#8B8FA3", fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid #F0F2F5" }}>Verschil</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { l: "Stopleeftijd", b: `${stopLeeftijd}`, s: `${scenStop}`, d: scenStop !== stopLeeftijd ? `${scenStop > stopLeeftijd ? "+" : ""}${scenStop - stopLeeftijd}j` : "—" },
+                      { l: "Inleg/mnd", b: fmt(maandInleg), s: fmt(scenInleg), d: scenInleg !== maandInleg ? `${scenInleg > maandInleg ? "+" : ""}${fmt(scenInleg - maandInleg)}` : "—" },
+                      { l: "Rendement", b: `${rendement}%`, s: `${scenRend}%`, d: scenRend !== rendement ? `${scenRend > rendement ? "+" : ""}${scenRend - rendement}%` : "—" },
+                      { l: "Vermogen op stop", b: fmt(baseV), s: fmt(scenV), d: fmt(verschilV), accent: verschilV >= 0 },
+                      { l: "Overbrugging nodig", b: fmt(baseOB), s: fmt(scenOB), d: fmt(scenOB - baseOB) },
+                      { l: baseTekort > 0 ? "Tekort" : "Overschot", b: fmt(baseTekort > 0 ? baseTekort : baseOver), s: fmt(scenTekort > 0 ? scenTekort : scenOver), d: fmt(verschilResult), accent: verschilResult >= 0, bold: true },
+                    ].map((r, i) => (
+                      <tr key={r.l} style={{ borderBottom: "1px solid #F0F2F5" }}>
+                        <td style={{ padding: "8px 10px", color: "#1a1a2e", fontWeight: r.bold ? 700 : 500 }}>{r.l}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--brand)", fontWeight: r.bold ? 800 : 600 }}>{r.b}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: "#2563EB", fontWeight: r.bold ? 800 : 600 }}>{r.s}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: r.accent !== undefined ? (r.accent ? "#16A34A" : "#DC2626") : "#8B8FA3", fontWeight: r.bold ? 800 : 600 }}>{r.d}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              <div style={{ background: "#fff", borderRadius: 10, padding: "18px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 14, fontFamily: "var(--f)" }}>Vermogensgroei per scenario</div>
+              {/* CHART */}
+              <div style={{ background: "#fff", borderRadius: 12, padding: "18px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--brand)", marginBottom: 14, fontFamily: "var(--f)" }}>Vermogensgroei: huidig plan vs. scenario</div>
                 <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={Array.from({ length: Math.max(1, 76 - leeftijd) }, (_, i) => {
-                    const a = leeftijd + i;
-                    const r = { leeftijd: a };
-                    scenarios.forEach((sc, j) => {
-                      let sp = spaargeld, bl = beleggingen;
-                      for (let y = 0; y < i; y++) { sp = sp * (1 + SPAARRENTE); bl = bl * (1 + sc.rend / 100) + sc.il * 12; }
-                      r[`s${j}`] = Math.round(sp + bl);
-                    });
-                    return r;
-                  })}>
-                    <CartesianGrid stroke="#F5F5F5" vertical={false}/><XAxis dataKey="leeftijd" tick={{ fontSize: 10, fill: "#CCC" }} axisLine={false} tickLine={false}/>
-                    <YAxis tickFormatter={fmtS} tick={{ fontSize: 10, fill: "#CCC" }} axisLine={false} tickLine={false}/><Tooltip content={<ChartTip/>}/>
+                  <ComposedChart data={chartData}>
+                    <CartesianGrid stroke="#F5F5F5" vertical={false}/>
+                    <XAxis dataKey="leeftijd" tick={{ fontSize: 10, fill: "#CCC" }} axisLine={false} tickLine={false}/>
+                    <YAxis tickFormatter={fmtS} tick={{ fontSize: 10, fill: "#CCC" }} axisLine={false} tickLine={false}/>
+                    <Tooltip content={<ChartTip/>}/>
                     <Legend wrapperStyle={{ fontSize: 11, fontFamily: "var(--f)" }}/>
-                    <Line type="monotone" dataKey="s0" stroke="var(--brand)" name={scenarios[0].label} strokeWidth={2} dot={false}/>
-                    <Line type="monotone" dataKey="s1" stroke="#2563EB" name={scenarios[1].label} strokeWidth={1.5} dot={false} strokeDasharray="6 3"/>
-                    <Line type="monotone" dataKey="s2" stroke="#16A34A" name={scenarios[2].label} strokeWidth={1.5} dot={false} strokeDasharray="6 3"/>
-                    <Line type="monotone" dataKey="s3" stroke="#D97706" name={scenarios[3].label} strokeWidth={1.5} dot={false} strokeDasharray="6 3"/>
+                    <ReferenceLine x={stopLeeftijd} stroke="var(--brand)" strokeDasharray="4 4" strokeWidth={1} label={{ value: `Stop ${stopLeeftijd}`, position: "top", fontSize: 9, fill: "var(--brand)" }}/>
+                    {scenStop !== stopLeeftijd && <ReferenceLine x={scenStop} stroke="#2563EB" strokeDasharray="4 4" strokeWidth={1} label={{ value: `Stop ${scenStop}`, position: "top", fontSize: 9, fill: "#2563EB" }}/>}
+                    <Line type="monotone" dataKey="huidig" stroke="var(--brand)" name={`Huidig plan (${rendement}%)`} strokeWidth={2.5} dot={false}/>
+                    <Line type="monotone" dataKey="scenario" stroke="#2563EB" name={`Scenario (${scenRend}%)`} strokeWidth={2} dot={false} strokeDasharray="8 4"/>
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -1451,74 +1589,172 @@ export default function App() {
 
         {/* ═══ PRO / MEER TAB ═══ */}
         {tab === "pro" && <>
-          {/* AANNAMES (#11) */}
+          {/* OVER DEZE TOOL */}
           <div style={{ background: "#fff", borderRadius: 14, padding: "22px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 14, fontFamily: "var(--f)" }}>Aannames in deze berekening</div>
-            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.7, fontFamily: "var(--f)" }}>
-              Transparantie is belangrijk. Hier zijn de aannames en vuistregels die we gebruiken:
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 8, fontFamily: "var(--f)" }}>Over Pensioenplanner</div>
+            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.75, fontFamily: "var(--f)" }}>
+              Deze tool is gratis en blijft dat ook. Ik heb hem gebouwd omdat ik merkte hoe lastig het is om echt inzicht te krijgen in je pensioensituatie. Mijnpensioenoverzicht.nl laat zien wat je later krijgt, maar niet of dat genoeg is — en al helemaal niet wat je eraan kunt doen. Met deze tool kun je zelf scenario's testen en zien wanneer je mogelijk kunt stoppen met werken en wat je kunt veranderen om er wél te komen.
             </div>
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              {[
-                { l: "Spaarrente", v: "2% per jaar", n: "Gemiddelde Nederlandse spaarrente" },
-                { l: "Beleggingsrendement", v: `${rendement}% per jaar (door jou ingesteld)`, n: "Langetermijngemiddelde wereldwijde index ~7%" },
-                { l: "Belastingvoordeel pensioenbeleggen", v: "37% van inleg", n: "Marginaal tarief schijf 1 (2025/2026)" },
-                { l: "Vervroeging werkgeverspensioen", v: "~8% minder per jaar", n: "Vuistregel — verschilt per pensioenfonds" },
-                { l: "AOW-leeftijd", v: "67 jaar", n: "Vastgesteld t/m 2027. Vanaf 2028: 67j + 3mnd" },
-                { l: "Pensioenrichtleeftijd", v: "68 jaar", n: "Standaard in de meeste pensioenregelingen" },
-                { l: "AOW samenwonend", v: `€${AOW_SAMEN_BRUTO}/mnd bruto p.p.`, n: "2026 bedragen" },
-                { l: "AOW alleenstaand", v: `€${AOW_ALLEEN_BRUTO}/mnd bruto`, n: "2026 bedragen" },
-                { l: "Veilige onttrekking", v: "4% per jaar", n: "Trinity-studie, 30+ jaar horizon" },
-                { l: "Inflatie", v: "Niet meegenomen", n: "Bedragen zijn in euro's van vandaag" },
-                { l: "Belasting over uitkeringen", v: "Niet berekend", n: "Bedragen zijn bruto — netto is lager" },
-              ].map((r, i) => (
-                <div key={r.l} style={{ display: "flex", alignItems: "baseline", padding: "6px 0", borderTop: i > 0 ? "1px solid #F0F2F5" : "none" }}>
-                  <div style={{ flex: "0 0 220px", fontSize: 12, fontWeight: 600, color: "#1a1a2e", fontFamily: "var(--f)" }}>{r.l}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)" }}>{r.v}</div>
-                    <div style={{ fontSize: 10, color: "#C4C8D0", fontFamily: "var(--f)" }}>{r.n}</div>
-                  </div>
-                </div>
-              ))}
+            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.75, fontFamily: "var(--f)", marginTop: 8 }}>
+              Alles draait lokaal in je browser. Er worden geen gegevens opgeslagen. Er zitten geen affiliatelinks in en er is geen betaalde versie.
             </div>
           </div>
 
-          {/* UPCOMING FEATURES */}
+          {/* MIJN BELEGGINGSTIPS */}
           <div style={{ background: "#fff", borderRadius: 14, padding: "22px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Binnenkort beschikbaar</div>
-            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.6, marginBottom: 16, fontFamily: "var(--f)" }}>
-              We werken aan nieuwe functies om je pensioenplan completer te maken. Hieronder een overzicht van wat eraan komt.
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 8, fontFamily: "var(--f)" }}>Mijn beleggingstips</div>
+
+            <div style={{ padding: "14px 16px", borderRadius: 10, background: "var(--brand-light)", borderLeft: "3px solid var(--brand)", marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: "var(--brand)", lineHeight: 1.75, fontFamily: "var(--f)" }}>
+                <strong>Even persoonlijk.</strong> Ik beleg zelf bij <strong>Meesman</strong> — vrij vermogen, pensioen, en ook de rekeningen van mijn kinderen. Alles bij één partij. Breed gespreid wereldwijd indexfonds, lage kosten, volledig geautomatiseerd. Ik kijk er niet naar om.
+              </div>
+              <div style={{ fontSize: 12, color: "var(--brand)", lineHeight: 1.75, fontFamily: "var(--f)", marginTop: 8 }}>
+                Daarnaast gebruik ik <strong>Bux</strong> voor individuele aandelen en sectorspecifieke fondsen — ik doe dit omdat ik het leuk vind, niet omdat het slimmer is. Voor 90% van de mensen is alleen Meesman genoeg.
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                <a href="https://www.meesman.nl" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", textDecoration: "none", borderBottom: "1px solid var(--brand)", fontFamily: "var(--f)" }}>→ Meesman</a>
+                <a href="https://getbux.com" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", textDecoration: "none", borderBottom: "1px solid var(--brand)", fontFamily: "var(--f)" }}>→ Bux</a>
+                <span style={{ fontSize: 11, color: "#8B8FA3", fontFamily: "var(--f)" }}>Alternatieven: <a href="https://new.brandnewday.nl" target="_blank" rel="noopener noreferrer" style={{ color: "#8B8FA3", textDecoration: "none", borderBottom: "1px dashed #C4C8D0" }}>Brand New Day</a> · <a href="https://www.degiro.nl" target="_blank" rel="noopener noreferrer" style={{ color: "#8B8FA3", textDecoration: "none", borderBottom: "1px dashed #C4C8D0" }}>DeGiro</a></span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 10, color: "#C4C8D0", lineHeight: 1.6, fontFamily: "var(--f)" }}>
+              Dit is mijn persoonlijke ervaring, geen financieel advies. Beleggen brengt risico's met zich mee. Ik ontvang geen vergoeding van bovenstaande partijen.
+            </div>
+          </div>
+
+          {/* DE BASIS + GOUDEN COMBI */}
+          <div style={{ background: "#fff", borderRadius: 14, padding: "22px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 8, fontFamily: "var(--f)" }}>De basis in 4 zinnen</div>
+            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.75, fontFamily: "var(--f)", marginBottom: 16 }}>
+              <strong style={{ color: "#1a1a2e" }}>Spreid breed</strong> — koop geen losse aandelen maar een indexfonds dat duizenden bedrijven bevat.
+              <strong style={{ color: "#1a1a2e" }}> Denk in jaren</strong> — de beurs gaat op en neer, over 15+ jaar is het gemiddelde ~7% per jaar.
+              <strong style={{ color: "#1a1a2e" }}> Houd kosten laag</strong> — elk procent aan kosten vreet over 30 jaar tienduizenden euro's.
+              <strong style={{ color: "#1a1a2e" }}> Automatiseer</strong> — elke maand hetzelfde bedrag, niet timen, niet pieken.
+            </div>
+
+            <div style={{ background: "#FAFBF9", borderRadius: 12, border: "1.5px solid var(--brand)", padding: "16px 18px" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>De gouden combi: privé + pensioen</div>
+              <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.7, fontFamily: "var(--f)" }}>
+                Je hebt twee problemen: de overbrugging (tussen stoppen en pensioen) en de oude dag. Privé beleggen dekt de overbrugging — je kunt er altijd bij. Pensioenbeleggen dekt de oude dag — je krijgt tot ~37% van je inleg terug via je belastingaangifte. Samen zijn ze de gouden combi. Pas de verdeling aan via de verdeelslider in je dashboard.
+              </div>
+            </div>
+          </div>
+
+          {/* ZELF VERDER LEREN */}
+          <div style={{ background: "#fff", borderRadius: 14, padding: "22px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 4, fontFamily: "var(--f)" }}>Zelf verder leren</div>
+            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.6, marginBottom: 14, fontFamily: "var(--f)" }}>
+              Dit zijn de bronnen waar ik zelf het meest van geleerd heb.
             </div>
             {[
-              { icon: "👫", title: "Partner-modus", desc: "Twee inkomens, twee pensioenen, één plan. Essentieel als je samenwoont.", status: "In ontwikkeling" },
-              { icon: "📄", title: "PDF export", desc: "Sla je pensioenplan op als PDF om te delen met je financieel adviseur of partner.", status: "In ontwikkeling" },
-              { icon: "📊", title: "Netto berekening", desc: "Zie niet alleen bruto maar ook netto bedragen per fase. Inclusief belastingschijven en heffingskortingen.", status: "Gepland" },
-              { icon: "📈", title: "Reëel vs. nominaal", desc: "Toggle tussen bedragen in euro's van vandaag en toekomstige euro's. Zodat je weet wat je geld echt waard is.", status: "Gepland" },
-              { icon: "🏦", title: "Meerdere pensioenproducten", desc: "Voeg meerdere lijfrentes of pensioenrekeningen apart toe met eigen inleg en rendement.", status: "Gepland" },
-              { icon: "🔀", title: "Gecombineerde scenario's", desc: "Speel met stopleeftijd, inleg én rendement tegelijk in één scenario. Vergelijk tot 5 scenario's naast elkaar.", status: "Gepland" },
-              { icon: "📉", title: "Benchmarks", desc: "Vergelijk je situatie met het CBS-gemiddelde voor jouw leeftijdscategorie. Sta je boven of onder de norm?", status: "Gepland" },
-              { icon: "🔔", title: "Maandelijkse check-in", desc: "Krijg een herinnering om je cijfers bij te werken. Zie hoe je plan zich ontwikkelt over tijd.", status: "Op de roadmap" },
-            ].map((f, i) => (
-              <div key={f.title} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 0", borderTop: i > 0 ? "1px solid #F0F2F5" : "none" }}>
-                <span style={{ fontSize: 24, marginTop: 2 }}>{f.icon}</span>
+              { name: "Mr. FOB (Financieel Onafhankelijk Blog)", url: "https://www.financieelonafhankelijkblog.nl", desc: "De beste Nederlandse bron over indexbeleggen en financiële onafhankelijkheid. Start hier als je niks weet. Heeft ook een indexfondsen-vergelijker." },
+              { name: "r/DutchFIRE", url: "https://www.reddit.com/r/DutchFIRE/", desc: "Actieve community over eerder stoppen met werken. Goed voor specifieke vragen, maar filter op kwaliteit — niet elk advies is goed." },
+              { name: "r/geldzaken", url: "https://www.reddit.com/r/geldzaken/", desc: "Breder dan FIRE. Goed voor vragen over belasting, hypotheek, en dagelijkse financiën." },
+            ].map((l, i) => (
+              <a key={l.name} href={l.url} target="_blank" rel="noopener noreferrer" style={{
+                display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 0",
+                borderTop: i > 0 ? "1px solid #F0F2F5" : "none", textDecoration: "none",
+                transition: "opacity 0.15s"
+              }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "0.7"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+              >
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a2e", fontFamily: "var(--f)" }}>{f.title}</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: f.status === "In ontwikkeling" ? "var(--brand)" : "#8B8FA3", background: f.status === "In ontwikkeling" ? "var(--brand-light)" : "#F5F7F6", padding: "2px 8px", borderRadius: 4, letterSpacing: "0.03em" }}>{f.status}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>{f.desc}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)", marginBottom: 2 }}>{l.name}</div>
+                  <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>{l.desc}</div>
                 </div>
-              </div>
+                <span style={{ fontSize: 14, color: "#C4C8D0", marginTop: 2, flexShrink: 0 }}>↗</span>
+              </a>
+            ))}
+
+            {/* HANDIGE TOOLS */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#8B8FA3", marginTop: 14, marginBottom: 8, fontFamily: "var(--f)" }}>Handige tools</div>
+            {[
+              { name: "Mijnpensioenoverzicht.nl", url: "https://www.mijnpensioenoverzicht.nl", desc: "Zie hoeveel werkgeverspensioen je hebt opgebouwd. Start hier als je dat bedrag niet weet." },
+              { name: "Belastingdienst: jaarruimte", url: "https://www.belastingdienst.nl/wps/wcm/connect/nl/aftrek-en-kortingen/content/hoe-bereken-ik-mijn-jaarruimte", desc: "Bereken hoeveel je belastingvrij mag storten in een pensioenproduct. De meeste mensen laten dit liggen." },
+            ].map((l, i) => (
+              <a key={l.name} href={l.url} target="_blank" rel="noopener noreferrer" style={{
+                display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0",
+                borderTop: "1px solid #F0F2F5", textDecoration: "none",
+                transition: "opacity 0.15s"
+              }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "0.7"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)", marginBottom: 2 }}>{l.name}</div>
+                  <div style={{ fontSize: 11, color: "#8B8FA3", lineHeight: 1.6, fontFamily: "var(--f)" }}>{l.desc}</div>
+                </div>
+                <span style={{ fontSize: 14, color: "#C4C8D0", marginTop: 2, flexShrink: 0 }}>↗</span>
+              </a>
             ))}
           </div>
 
-          {/* FEEDBACK CTA */}
-          <div style={{ background: "var(--brand-light)", borderRadius: 14, padding: "22px 24px", textAlign: "center" }} className="fu">
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--brand)", marginBottom: 6, fontFamily: "var(--f)" }}>Welke feature wil jij het liefst?</div>
-            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.6, marginBottom: 14, fontFamily: "var(--f)" }}>
-              We bouwen wat jullie het hardst nodig hebben. Laat het ons weten — je feedback bepaalt de volgorde.
+          {/* WHAT'S NEXT + FEEDBACK — COMBINED */}
+          <div style={{ background: "#fff", borderRadius: 14, padding: "22px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }} className="fu">
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)", marginBottom: 8, fontFamily: "var(--f)" }}>Wat komt er aan?</div>
+
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", borderRadius: 10, background: "var(--brand-light)", border: "1px solid var(--brand)", marginBottom: 14 }}>
+              <span style={{ fontSize: 22, marginTop: 1 }}>👫</span>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", fontFamily: "var(--f)" }}>Partner-modus</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "var(--brand)", background: "#fff", padding: "2px 8px", borderRadius: 4 }}>In ontwikkeling</span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--brand-mid)", lineHeight: 1.65, fontFamily: "var(--f)" }}>
+                  Twee inkomens, twee pensioenen, twee AOW-momenten — één gezamenlijk plan. Inclusief: wat als de ene partner eerder stopt dan de andere?
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--brand)", fontWeight: 600, fontFamily: "var(--f)" }}>Feedback? Mail naar feedback@pensioenplanner.nl</div>
+
+            <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.75, fontFamily: "var(--f)" }}>
+              Dit is een eenmansproject. Klopt een berekening niet? Mis je iets? Heb je een idee? Laat het me weten — elke reactie lees ik.
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <a href="mailto:feedback@pensioenplanner.nl" style={{ display: "inline-flex", alignItems: "center", padding: "10px 18px", borderRadius: 10, background: "var(--brand)", color: "#fff", fontSize: 12, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)", transition: "opacity 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+              >Mail me</a>
+            </div>
           </div>
+
+          {/* AANNAMES */}
+          <details style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.03)", overflow: "hidden" }} className="fu">
+            <summary style={{ padding: "18px 22px", cursor: "pointer", fontFamily: "var(--f)", listStyle: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--brand)" }}>Aannames en vuistregels</div>
+              <span style={{ fontSize: 16, color: "#C4C8D0", fontWeight: 300 }}>▼</span>
+            </summary>
+            <div style={{ padding: "0 22px 20px", borderTop: "1px solid #F0F2F5" }}>
+              <div style={{ fontSize: 12, color: "#8B8FA3", lineHeight: 1.7, fontFamily: "var(--f)", marginTop: 12, marginBottom: 12 }}>
+                Transparantie vind ik belangrijk. Hier zijn alle aannames die de berekeningen gebruiken:
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {[
+                  { l: "Spaarrente", v: "2% per jaar", n: "Gemiddelde Nederlandse spaarrente" },
+                  { l: "Beleggingsrendement", v: `${rendement}% per jaar (door jou ingesteld)`, n: "Langetermijngemiddelde wereldwijde index ~7%" },
+                  { l: "Belastingvoordeel", v: "37% van pensioeninleg", n: "Marginaal tarief schijf 1 (2025/2026)" },
+                  { l: "Vervroeging pensioen", v: "~8% minder per jaar", n: "Vuistregel — verschilt per fonds" },
+                  { l: "AOW-leeftijd", v: "67 jaar", n: "Vastgesteld t/m 2027" },
+                  { l: "Pensioenrichtleeftijd", v: "68 jaar", n: "Standaard in meeste regelingen" },
+                  { l: "AOW samenwonend", v: `€${AOW_SAMEN_BRUTO}/mnd bruto p.p.`, n: "2026" },
+                  { l: "AOW alleenstaand", v: `€${AOW_ALLEEN_BRUTO}/mnd bruto`, n: "2026" },
+                  { l: "Veilige onttrekking", v: "4% per jaar", n: "Trinity-studie" },
+                  { l: "Lijfrente-uitkeringsduur", v: `Minimaal ${lijfrenteUitkeringsDuur} jaar (bij start op ${lijfrenteStartLeeftijd})`, n: "Jaren tot AOW + 20 jaar, minimaal 20" },
+                  { l: "Inflatie", v: "Niet meegenomen", n: "Bedragen in euro's van vandaag" },
+                  { l: "Belasting", v: "Niet berekend", n: "Alle bedragen zijn bruto" },
+                ].map((r, i) => (
+                  <div key={r.l} style={{ display: "flex", alignItems: "baseline", padding: "5px 0", borderTop: i > 0 ? "1px solid #F0F2F5" : "none" }}>
+                    <div style={{ flex: "0 0 180px", fontSize: 12, fontWeight: 600, color: "#1a1a2e", fontFamily: "var(--f)" }}>{r.l}</div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f)" }}>{r.v}</span>
+                      <span style={{ fontSize: 10, color: "#C4C8D0", fontFamily: "var(--f)", marginLeft: 6 }}>{r.n}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
         </>}
       </div>
 
