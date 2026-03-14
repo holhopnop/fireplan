@@ -1432,7 +1432,7 @@ export default function App() {
                 return card;
               });
             })()}
-            <PhaseCard label=lang === "en" ? "All income flowing" : "Alles loopt" color="#0D6B58" jaren="rest" start={overbrugging.alles.start} end="∞" uitgaven={overbrugging.alles.uitgaven} inkomen={overbrugging.alles.inkomen} gat={overbrugging.alles.gat} naAOW={true}
+            <PhaseCard label={lang === "en" ? "All income flowing" : "Alles loopt"} color="#0D6B58" jaren="rest" start={overbrugging.alles.start} end="∞" uitgaven={overbrugging.alles.uitgaven} inkomen={overbrugging.alles.inkomen} gat={overbrugging.alles.gat} naAOW={true}
               details={lang === "en" ? `AOW + employer pension${pbUitkering > 0 ? " + annuity" : ""}. ${overbrugging.alles.gat > 0 ? "A monthly shortfall remains." : "Your income covers your expenses."}` : `AOW + werkgeverspensioen${pbUitkering > 0 ? " + lijfrente" : ""}. ${overbrugging.alles.gat > 0 ? "Resteert een maandelijks tekort." : "Je inkomen dekt je uitgaven."}`} delay={overbrugging.phases.length * 0.08} />
           </div>
 
