@@ -834,7 +834,7 @@ function getT(lang) { return lang === "en" ? {
     risico2Title:"Box 3 kan veranderen.",risico2Text:"De overheid werkt aan een nieuw Box 3-stelsel waarin je belasting betaalt over je werkelijke rendement in plaats van een fictief rendement. Dit kan je netto rendement met 1-2 procentpunt verlagen. Wil je hier rekening mee houden? Vul dan een lager rendement in (bijv. 5% in plaats van 7%).",
     risico3Title:"Tip:",risico3Text:"pensioenbeleggen via een lijfrente valt niet onder Box 3. Hoe meer je via pensioen belegt (via de verdeelslider), hoe minder Box 3-risico je loopt.",
     jaar:"jaar",jaren:"jaar",
-  } }
+  }; }
 
 export default function App() {
   const [ready, setReady] = useState(false);
