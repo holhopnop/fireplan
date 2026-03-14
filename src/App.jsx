@@ -266,7 +266,7 @@ function EditPanel({ title, open, onToggle, children, summary, showHint, hintTex
 /* ═══════════════════════════════════════
    LANDING PAGE
    ═══════════════════════════════════════ */
-function Landing({ onBegeleid, onDirect, lang, setLang, T }) {
+function Landing({ onBegeleid, onDirect, lang, T }) {
   return (
     <div style={{ minHeight: "100vh", background: "#FAFBF9", fontFamily: "var(--f)" }}>
       {/* HERO */}
@@ -275,7 +275,6 @@ function Landing({ onBegeleid, onDirect, lang, setLang, T }) {
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 32 }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "var(--brand)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1 }}>🏖️</div>
             <span style={{ fontSize: 17, fontWeight: 700, color: "var(--brand)", letterSpacing: "-0.03em" }}>AltijdVrijdag</span>
-            <button onClick={() => setLang(lang === "nl" ? "en" : "nl")} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #E0E4E3", background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#8B8FA3", fontFamily: "var(--f)", marginLeft: 12 }}>{lang === "nl" ? "EN" : "NL"}</button>
           </div>
           <h1 style={{ fontSize: "clamp(32px, 5.5vw, 50px)", fontWeight: 800, color: "#1a1a2e", lineHeight: 1.1, letterSpacing: "-0.04em", margin: "0 0 18px" }}>
             {lang === "en" ? <>Calculate when you never<br/>have to work a Monday<br/>again</> : <>Bereken wanneer je nooit<br/>meer een maandag hoeft<br/>te werken</>}
@@ -845,7 +844,7 @@ export default function App() {
   const [firstVisit, setFirstVisit] = useState(true);
   const [sharedPlan, setSharedPlan] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [lang, setLang] = useState(() => { try { return localStorage.getItem("av-lang") || "nl"; } catch { return "nl"; } });
+  const lang = "nl";
 
   const [leeftijd, setLeeftijd] = useState(40);
   const [stopLeeftijd, setStopLeeftijd] = useState(63);
@@ -881,7 +880,7 @@ export default function App() {
   const pensioenbeleggen = Math.round(totaalInleg * pensioenPct / 100);
   const belastingVoordeel = Math.round(pensioenbeleggen * BELASTING_TARIEF);
   const huidigVermogen = spaargeld + beleggingen;
-  const allState = { lang, leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekEindjaar, restKostenNaAflossing, huurPerMaand, huurIndexatie, vasteWoonlasten, werkgeversPensioen, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement };
+  const allState = { leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekEindjaar, restKostenNaAflossing, huurPerMaand, huurIndexatie, vasteWoonlasten, werkgeversPensioen, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement };
   const currentYear = new Date().getFullYear();
   const hypotheekAflosLeeftijd = leeftijd + (hypotheekEindjaar - currentYear);
   // Woonlasten reductie na aflossing (alleen koop_hypotheek)
@@ -921,7 +920,6 @@ export default function App() {
   }, []);
 
   useEffect(() => { if (ready) save(allState); }, [leeftijd, stopLeeftijd, samenwonend, gewenstUitgaven, uitgavenNaAOW, woningType, hypotheekPerMaand, hypotheekEindjaar, restKostenNaAflossing, huurPerMaand, huurIndexatie, vasteWoonlasten, werkgeversPensioen, pensioenIngangLeeftijd, lijfrenteStartLeeftijd, pensioenbeleggenPot, spaargeld, beleggingen, totaalInleg, pensioenPct, rendement]);
-  useEffect(() => { try { localStorage.setItem("av-lang", lang); } catch {} }, [lang]);
 
   const T = getT(lang);
 
@@ -1084,7 +1082,7 @@ export default function App() {
 
   if (loading) return <div style={{ minHeight: "100vh", background: "#FAFBF9", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 14, color: "#BBB" }}>{lang === "en" ? "Loading..." : "Laden..."}</div></div>;
 
-  if (page === "landing") return <>{fonts}{baseStyles}<GlobalTooltip /><Landing onBegeleid={() => setPage("onboarding")} onDirect={handleDirectStart} lang={lang} setLang={setLang} T={T} /></>;
+  if (page === "landing") return <>{fonts}{baseStyles}<GlobalTooltip /><Landing onBegeleid={() => setPage("onboarding")} onDirect={handleDirectStart} lang={lang} T={T} /></>;
   if (page === "onboarding") return <>{fonts}{baseStyles}<GlobalTooltip /><Onboarding onComplete={handleOnboard} lang={lang} T={T} /></>;
 
   const TABS = [
@@ -1212,10 +1210,6 @@ export default function App() {
           ))}
         </nav>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button data-noprint onClick={() => setLang(lang === "nl" ? "en" : "nl")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ECF0EE", background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#8B8FA3", fontFamily: "var(--f)", transition: "all 0.15s" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--brand)"; e.currentTarget.style.color = "var(--brand)"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "#ECF0EE"; e.currentTarget.style.color = "#8B8FA3"; }}
-          >{lang === "nl" ? "EN" : "NL"}</button>
           <button data-noprint onClick={() => {
             const encoded = encodeState(allState);
             const url = window.location.origin + window.location.pathname + "#" + encoded;
